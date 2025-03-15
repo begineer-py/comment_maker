@@ -100,6 +100,8 @@ def parse_arguments():
                         help='API请求之间的基础延迟时间(秒) (默认: 6.0秒)')
     parser.add_argument('--max-backoff', type=float, default=64.0,
                         help='最大退避延迟时间(秒) (默认: 64.0秒)')
+    parser.add_argument('--comment-style', type=str, choices=['line_start', 'line_end'], default='line_end',
+                        help='注释风格: line_start (行前注释) 或 line_end (行尾注释) (默认: line_end)')
     return parser.parse_args()
 
 def get_python_files(folder_path, recursive=False, file_filter='*.py'):
@@ -107,21 +109,63 @@ def get_python_files(folder_path, recursive=False, file_filter='*.py'):
     pattern = os.path.join(folder_path, '**', file_filter) if recursive else os.path.join(folder_path, file_filter)
     return glob.glob(pattern, recursive=recursive)
 
-def generate_comments_for_code(code):
+def generate_comments_for_code(code, comment_style='line_end'):
     """使用Gemini API为代码生成逐行注释"""
-    prompt = f"""
-    请为以下Python代码添加逐行中文注释。
-    只需在每行代码前添加注释，不要修改原始代码。
-    注释应该简洁明了地解释该行代码的功能。
-    对于空行或已有注释的行，请保持原样。
-    
-    代码:
-    ```python
-    {code}
-    ```
-    
-    请返回带有逐行注释的完整代码。
-    """
+    if comment_style == 'line_end':
+        prompt = f"""
+        请为以下Python代码添加中文注释。
+        
+        重要规则：
+        1. 只使用行尾注释，即在代码行后面添加 # 后跟注释内容
+        2. 不要添加行前注释，避免缩进错误
+        3. 不要修改原始代码的任何部分，包括空行和缩进
+        4. 对于已有注释的行，保持原样不变
+        5. 注释应简洁明了地解释该行代码的功能
+        6. 空行不需要添加注释
+        
+        示例：
+        ```python
+        def hello(name):  # 定义一个打招呼的函数，接收name参数
+            greeting = "Hello, " + name  # 创建问候语字符串
+            return greeting  # 返回问候语
+        ```
+        
+        代码:
+        ```python
+        {code}
+        ```
+        
+        请返回带有行尾注释的完整代码。
+        """
+    else:  # line_start
+        prompt = f"""
+        请为以下Python代码添加逐行中文注释。
+        
+        重要规则：
+        1. 在每行代码前添加注释，使用 # 开头
+        2. 保持与代码相同的缩进级别，确保注释和代码对齐
+        3. 不要修改原始代码的任何部分
+        4. 对于已有注释的行，保持原样不变
+        5. 注释应简洁明了地解释该行代码的功能
+        6. 空行不需要添加注释
+        
+        示例：
+        ```python
+        # 定义一个打招呼的函数，接收name参数
+        def hello(name):
+            # 创建问候语字符串
+            greeting = "Hello, " + name
+            # 返回问候语
+            return greeting
+        ```
+        
+        代码:
+        ```python
+        {code}
+        ```
+        
+        请返回带有行前注释的完整代码。
+        """
     
     try:
         # 实现指数退避算法
@@ -132,6 +176,19 @@ def generate_comments_for_code(code):
         for attempt in range(max_retries):
             try:
                 response = model.generate_content(prompt)
+                
+                # 检查响应是否为空
+                if not response or not hasattr(response, 'text') or not response.text:
+                    print(f"[WARNING] API返回空响应 (attempt {attempt+1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        wait_time = min((2 ** attempt) + random.random(), max_backoff)
+                        print(f"[INFO] 等待 {wait_time:.2f} 秒后重试...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print("[ERROR] 多次尝试后API仍返回空响应，返回原始代码")
+                        return code
+                
                 commented_code = response.text
                 
                 # 提取代码块
@@ -139,6 +196,11 @@ def generate_comments_for_code(code):
                 match = re.search(code_pattern, commented_code, re.DOTALL)
                 if match:
                     commented_code = match.group(1)
+                
+                # 确保返回的不是None
+                if commented_code is None:
+                    print("[WARNING] 提取的代码为None，返回原始代码")
+                    return code
                 
                 return commented_code
             except Exception as retry_error:
@@ -158,9 +220,9 @@ def generate_comments_for_code(code):
                     raise  # 重试次数用完，抛出异常
     except Exception as e:
         print(f"[ERROR] Error generating comments: {e}")
-        return code
+        return code  # 出错时返回原始代码
 
-def process_file(file_path, output_folder, delay=6.0):
+def process_file(file_path, output_folder, delay=6.0, comment_style='line_end'):
     """处理单个Python文件，添加注释并保存到输出文件夹"""
     try:
         print(f"[INFO] Processing: {file_path}")
@@ -170,7 +232,12 @@ def process_file(file_path, output_folder, delay=6.0):
             code = f.read()
         
         # 生成注释
-        commented_code = generate_comments_for_code(code)
+        commented_code = generate_comments_for_code(code, comment_style)
+        
+        # 确保commented_code不是None
+        if commented_code is None:
+            print(f"[ERROR] 生成的注释代码为None，跳过保存: {file_path}")
+            return False
         
         # 创建输出文件夹
         os.makedirs(output_folder, exist_ok=True)
@@ -181,10 +248,17 @@ def process_file(file_path, output_folder, delay=6.0):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         # 保存注释后的代码
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(commented_code)
-        
-        print(f"[INFO] Completed: {file_path} -> {output_path}")
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(commented_code)
+            print(f"[INFO] Completed: {file_path} -> {output_path}")
+        except TypeError as te:
+            print(f"[ERROR] 写入文件时类型错误: {te}")
+            print(f"[INFO] 尝试将None转换为空字符串并保存原始代码")
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(code)  # 保存原始代码
+            print(f"[INFO] 已保存原始代码: {output_path}")
+            return False
         
         # 添加随机延迟，避免API请求过于规律
         actual_delay = delay + random.uniform(0, 2)
@@ -194,6 +268,8 @@ def process_file(file_path, output_folder, delay=6.0):
         return True
     except Exception as e:
         print(f"[ERROR] Error processing file {file_path}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def main():
@@ -217,9 +293,11 @@ def main():
     
     print(f"[INFO] Found {len(python_files)} files")
     print(f"[INFO] Rate limiting: Using {args.delay} seconds base delay between requests with exponential backoff")
+    print(f"[INFO] Comment style: {'Line end comments' if args.comment_style == 'line_end' else 'Line start comments'}")
     
     # 处理每个文件
     success_count = 0
+    total_count = 0
     
     for file_path in python_files:
         # 跳过输出文件夹中的文件
@@ -229,11 +307,17 @@ def main():
         # 跳过当前脚本
         if os.path.samefile(file_path, __file__):
             continue
+        
+        total_count += 1
+        current_file_num = total_count
+        total_files = len(python_files)
+        print(f"[INFO] Processing file {current_file_num}/{total_files}: {file_path}")
             
-        if process_file(file_path, args.output, args.delay):
+        if process_file(file_path, args.output, args.delay, args.comment_style):
             success_count += 1
+            print(f"[INFO] Progress: {success_count}/{total_count} files completed successfully")
     
-    print(f"[INFO] Processing completed: {success_count}/{len(python_files)} files successfully commented")
+    print(f"[INFO] Processing completed: {success_count}/{total_count} files successfully commented")
 
 if __name__ == "__main__":
     main() 

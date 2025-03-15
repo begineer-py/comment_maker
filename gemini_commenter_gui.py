@@ -110,6 +110,25 @@ class GeminiCommenterGUI:
         filter_entry = ttk.Entry(option_frame, textvariable=self.filter_var, width=15)
         filter_entry.pack(side=tk.LEFT, padx=5)
         
+        # 注释风格选项
+        comment_style_frame = ttk.Frame(settings_frame)
+        comment_style_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(comment_style_frame, text="注释风格:").pack(side=tk.LEFT, padx=5)
+        self.comment_style_var = tk.StringVar(value="line_end")
+        
+        style_frame = ttk.Frame(comment_style_frame)
+        style_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        ttk.Radiobutton(style_frame, text="行尾注释 (# 在代码后)", 
+                       variable=self.comment_style_var, value="line_end").pack(side=tk.LEFT, padx=10)
+        ttk.Radiobutton(style_frame, text="行前注释 (# 在代码前)", 
+                       variable=self.comment_style_var, value="line_start").pack(side=tk.LEFT, padx=10)
+        
+        # 添加注释风格说明
+        ttk.Label(comment_style_frame, text="推荐使用行尾注释，避免缩进错误", 
+                 font=("Arial", 8, "italic")).pack(side=tk.RIGHT, padx=5)
+        
         # 添加速率限制设置框架
         rate_limit_frame = ttk.LabelFrame(settings_frame, text="API速率限制", padding="5")
         rate_limit_frame.pack(fill=tk.X, pady=5)
@@ -525,6 +544,7 @@ class GeminiCommenterGUI:
             # 获取其他参数
             recursive = self.recursive_var.get()
             file_filter = self.filter_var.get()
+            comment_style = self.comment_style_var.get()
             
             # 获取速率限制参数 - 在主线程中获取
             try:
@@ -562,15 +582,16 @@ class GeminiCommenterGUI:
             self.log(f"输出到: {output}")
             self.log(f"递归处理: {'是' if recursive else '否'}")
             self.log(f"文件过滤: {file_filter}")
+            self.log(f"注释风格: {'行尾注释' if comment_style == 'line_end' else '行前注释'}")
             self.log(f"请求延迟: {delay}秒")
             self.log(f"最大退避时间: {max_backoff}秒")
             self.log("使用指数退避算法处理API限制")
             
             # 在新线程中启动处理
-            print(f"[INFO] 启动处理线程，参数: delay={delay}, max_backoff={max_backoff}")
+            print(f"[INFO] 启动处理线程，参数: delay={delay}, max_backoff={max_backoff}, comment_style={comment_style}")
             threading.Thread(
                 target=self.process_files,
-                args=(folder, output, recursive, api_key, file_filter, delay, max_backoff),
+                args=(folder, output, recursive, api_key, file_filter, delay, max_backoff, comment_style),
                 daemon=True
             ).start()
             
@@ -581,7 +602,7 @@ class GeminiCommenterGUI:
             self.show_message("错误", f"启动处理时出错: {str(e)}", True)
             self.is_processing = False
     
-    def process_files(self, folder, output, recursive, api_key, file_filter="*.py", delay=6.0, max_backoff=64.0):
+    def process_files(self, folder, output, recursive, api_key, file_filter="*.py", delay=6.0, max_backoff=64.0, comment_style="line_end"):
         """处理选定的文件夹中的文件（在单独的线程中运行）"""
         print(f"[INFO] 开始处理文件: 当前线程ID={threading.get_ident()}, 主线程ID={threading.main_thread().ident}")
         print(f"[INFO] 是否在主线程中: {threading.current_thread() is threading.main_thread()}")
@@ -596,7 +617,7 @@ class GeminiCommenterGUI:
                 print("[WARNING] 最大回退时间值无效，使用默认值 60.0")
                 max_backoff = 60.0
                 
-            print(f"[INFO] 使用延迟={delay}秒, 最大回退时间={max_backoff}秒")
+            print(f"[INFO] 使用延迟={delay}秒, 最大回退时间={max_backoff}秒, 注释风格={comment_style}")
             
             # 构建命令
             command = [
@@ -615,6 +636,9 @@ class GeminiCommenterGUI:
             # 添加文件过滤参数
             if file_filter and file_filter != "*.py":
                 command.extend(["--filter", file_filter])
+                
+            # 添加注释风格参数
+            command.extend(["--comment-style", comment_style])
             
             print(f"[INFO] 执行命令: {' '.join(command)}")
             
@@ -641,29 +665,64 @@ class GeminiCommenterGUI:
             for line in process.stdout:
                 line = line.strip()
                 # 只记录重要的输出行
-                if "ERROR" in line or "WARNING" in line or "Processing file" in line or "Successfully processed" in line:
+                if "ERROR" in line or "WARNING" in line or "Processing" in line or "Completed" in line or "Successfully" in line:
                     print(f"[OUTPUT] {line}")
                 
                 # 添加到日志
                 self.queue.put(("log", line))
                 
-                # 检查是否找到了文件总数
-                if "找到" in line and "个Python文件" in line:
+                # 检查是否找到了文件总数 - 同时支持中英文
+                if ("Found" in line and "files" in line) or ("找到" in line and "个Python文件" in line) or ("找到" in line and "个文件" in line):
                     try:
-                        total_files = int(line.split("找到")[1].split("个")[0].strip())
-                        self.queue.put(("progress_max", total_files))
-                        self.queue.put(("status", f"处理 {total_files} 个文件..."))
+                        # 尝试从不同格式的输出中提取文件数量
+                        if "Found" in line and "files" in line:
+                            # 英文格式: "Found 2 files"
+                            parts = line.split()
+                            for i, part in enumerate(parts):
+                                if part == "Found" and i+1 < len(parts):
+                                    try:
+                                        total_files = int(parts[i+1])
+                                        break
+                                    except:
+                                        pass
+                        else:
+                            # 中文格式: "找到 2 个Python文件" 或 "找到 2 个文件"
+                            total_files = int(line.split("找到")[1].split("个")[0].strip())
+                        
+                        if total_files > 0:
+                            self.queue.put(("progress_max", total_files))
+                            self.queue.put(("status", f"处理 {total_files} 个文件..."))
+                            print(f"[INFO] 设置总文件数: {total_files}")
                     except Exception as e:
                         print(f"[ERROR] 解析文件总数时出错: {e}")
                 
-                # 检查是否处理了新文件
-                elif "已完成:" in line:
-                    processed_count += 1
+                # 检查是否处理了新文件 - 同时支持中英文
+                elif ("Completed" in line and "->" in line) or ("已完成" in line) or ("Processing completed" in line and "successfully" in line):
+                    # 如果是处理完成的总结行，提取总数
+                    if "Processing completed" in line and "successfully" in line:
+                        try:
+                            # 格式: "Processing completed: 2/2 files successfully commented"
+                            parts = line.split(":")
+                            if len(parts) > 1:
+                                fraction = parts[1].split("files")[0].strip()
+                                success, total = fraction.split("/")
+                                processed_count = int(success.strip())
+                                if total_files == 0:  # 如果之前没有设置总数
+                                    total_files = int(total.strip())
+                                    self.queue.put(("progress_max", total_files))
+                        except Exception as e:
+                            print(f"[ERROR] 解析处理完成信息时出错: {e}")
+                    else:
+                        # 单个文件处理完成
+                        processed_count += 1
+                        
+                    # 更新进度
                     self.queue.put(("progress", processed_count))
                     if total_files > 0:
                         self.queue.put(("status", f"已处理 {processed_count}/{total_files} 个文件"))
                     else:
                         self.queue.put(("status", f"已处理 {processed_count} 个文件"))
+                    print(f"[INFO] 更新处理计数: {processed_count}/{total_files}")
             
             # 等待进程完成
             return_code = process.wait()

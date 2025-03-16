@@ -120,3 +120,89 @@ https://aistudio.google.com/
 ## 許可證
 
 MIT
+## 修復了html編碼 和速率問題
+# HTML文件編碼問題解決方案
+
+## 問題描述
+
+在使用Gemini代碼註釋器處理HTML文件時，遇到了編碼問題，導致生成的註釋文件內容顯示為亂碼或無法正確讀取。
+
+## 原因分析
+
+1. **編碼檢測問題**：原始腳本在讀取文件時沒有正確檢測HTML文件的編碼，特別是對於包含中文等非ASCII字符的文件。
+2. **保存編碼問題**：在保存註釋後的文件時，沒有使用正確的編碼，導致中文字符無法正確顯示。
+3. **HTML特殊處理**：HTML文件需要特殊處理，包括添加適當的編碼聲明和確保使用UTF-8編碼保存。
+4. **API配額限制**：在測試過程中，還遇到了Gemini API的配額限制問題，需要增強重試機制。
+
+## 解決方案
+
+### 1. 改進文件讀取機制
+
+- 對於HTML文件，優先嘗試UTF-8編碼
+- 增加多種編碼嘗試：utf-8, cp950, big5, gbk, latin-1
+- 添加二進制讀取模式，處理帶BOM的UTF-8文件
+- 增強錯誤處理和日誌輸出
+
+```python
+# 對於HTML文件，優先嘗試UTF-8編碼
+if file_ext.lower() in ['.html', '.htm']:
+    print(f"[INFO] 檢測到HTML文件，優先嘗試UTF-8編碼")
+    encodings_to_try = ['utf-8'] + encodings_to_try
+
+# 嘗試檢測BOM並解碼
+if binary_data.startswith(b'\xef\xbb\xbf'):  # UTF-8 BOM
+    code = binary_data[3:].decode('utf-8')
+    print(f"[INFO] 檢測到UTF-8 BOM，成功解碼")
+    successful_encoding = 'utf-8-sig'  # 使用-sig表示帶BOM的UTF-8
+```
+
+### 2. 改進文件保存機制
+
+- 對於HTML文件，強制使用UTF-8編碼保存
+- 檢查註釋後的代碼是否可以使用檢測到的編碼進行編碼
+- 添加適當的編碼聲明到HTML文件
+- 增強錯誤處理，提供多種保存方式的回退機制
+
+```python
+# 對於HTML文件，強制使用UTF-8編碼保存
+if file_ext.lower() in ['.html', '.htm']:
+    print(f"[INFO] HTML文件將使用UTF-8編碼保存")
+    successful_encoding = 'utf-8'
+
+# 對於HTML文件，添加適當的編碼聲明
+if file_ext.lower() in ['.html', '.htm'] and '<meta charset=' not in commented_code.lower():
+    # 檢查是否有head標籤
+    if '<head>' in commented_code:
+        commented_code = commented_code.replace('<head>', '<head>\n    <meta charset="UTF-8">')
+        print(f"[INFO] 已添加UTF-8編碼聲明到HTML文件")
+```
+
+### 3. 增強API配額限制處理
+
+- 添加更長的重試等待時間
+- 針對不同類型的錯誤使用不同的重試策略
+- 增加日誌輸出，方便調試
+
+```python
+# 如果是配額限制問題，等待更長時間後重試
+if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
+    wait_time = base_wait_time * (2 ** attempt) + random.uniform(0, 5)
+    print(f"[WARNING] 檢測到API配額限制，等待 {wait_time:.2f} 秒後重試...")
+    time.sleep(wait_time)
+    continue
+```
+
+### 4. 測試腳本
+
+創建了一個獨立的測試腳本 `test_encoding.py`，用於測試HTML文件的編碼處理，不依賴於Gemini API。這個腳本可以：
+
+- 測試不同編碼的HTML文件的讀取
+- 測試添加註釋後的保存
+- 提供詳細的調試信息
+- 驗證保存的文件內容
+
+## 結論
+
+通過以上改進，我們成功解決了HTML文件的編碼問題，特別是對於包含中文等非ASCII字符的文件。現在，Gemini代碼註釋器可以正確處理各種編碼的HTML文件，並生成正確的註釋。
+
+同時，我們也增強了API配額限制的處理能力，使腳本在遇到API限制時能夠更加智能地重試，提高了腳本的穩定性和可靠性。

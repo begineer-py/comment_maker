@@ -4,6 +4,7 @@
 """
 Gemini代碼註釋器GUI
 使用Google Gemini AI為代碼添加中文註釋的圖形界面工具
+從環境變量讀取API密鑰
 """
 
 import os
@@ -17,7 +18,7 @@ import platform
 import time
 
 # 導入API金鑰管理模組
-from api_key_manager import get_api_key, save_api_key, test_api_connection
+from api_key_manager import get_api_key, save_api_key, test_api_connection, API_KEY_ENV_NAME
 
 # 導入GUI模塊
 from gui_modules import (
@@ -112,12 +113,14 @@ class GeminiCommenterGUI:
                     print(f"  - {key}: {value}")
         print("=" * 50)
         
-        print("[DEBUG] 嘗試獲取API密鑰...")
+        print(f"[DEBUG] 嘗試從環境變量 {API_KEY_ENV_NAME} 獲取API密鑰...")
         self.api_key = get_api_key()
         
         if self.api_key:
             masked_key = f"{self.api_key[:4]}...{self.api_key[-4:]}" if len(self.api_key) > 8 else "***"
             print(f"[LOG] 已獲取API密鑰: {masked_key} (長度: {len(self.api_key)})")
+        else:
+            print(f"[WARNING] 未找到API密鑰，請設置環境變量 {API_KEY_ENV_NAME}")
     
     def _create_ui(self):
         """創建UI組件"""
@@ -232,7 +235,7 @@ class GeminiCommenterGUI:
             bool: 如果API密鑰有效則返回True，否則返回False
         """
         if not self.api_key:
-            print("[WARNING] API密鑰未設置")
+            print(f"[WARNING] API密鑰未設置，請設置環境變量 {API_KEY_ENV_NAME}")
             self._prompt_for_api_key()
             return False
         

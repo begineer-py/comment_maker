@@ -4,6 +4,7 @@
 """
 API設置模塊
 處理API密鑰設置和測試相關功能
+從環境變量讀取API密鑰
 """
 
 import os
@@ -12,7 +13,7 @@ from tkinter import ttk, messagebox
 import threading
 
 # 導入API金鑰管理模組
-from api_key_manager import save_api_key, test_api_connection, save_api_key_permanently
+from api_key_manager import save_api_key, test_api_connection, save_api_key_permanently, API_KEY_ENV_NAME
 
 class ApiSettingsDialog:
     """API設置對話框類"""
@@ -84,7 +85,7 @@ class ApiSettingsDialog:
                  wraplength=480).pack(fill=tk.X, pady=5)
         
         # 添加注意事項標籤
-        note_label = ttk.Label(frame, text="注意：API密鑰將僅保存在當前程序會話中，程序關閉後將失效。\n要永久保存API密鑰，請使用下方的「永久保存」按鈕或設置系統環境變量 GEMINI_API_KEY。", 
+        note_label = ttk.Label(frame, text=f"注意：API密鑰將僅保存在當前程序會話中，程序關閉後將失效。\n要永久保存API密鑰，請使用下方的「永久保存」按鈕或設置系統環境變量 {API_KEY_ENV_NAME}。", 
                               foreground="red", wraplength=480)
         note_label.pack(fill=tk.X, pady=5)
         
@@ -169,7 +170,7 @@ class ApiSettingsDialog:
         # 顯示確認對話框
         confirm = messagebox.askyesno(
             "確認永久保存", 
-            "此操作將嘗試將API密鑰永久保存到系統環境變數中。\n\n"
+            f"此操作將嘗試將API密鑰永久保存到系統環境變數中 ({API_KEY_ENV_NAME})。\n\n"
             "- 在Windows上，將使用PowerShell設置用戶級環境變數\n"
             "- 在Linux/macOS上，將添加到~/.bashrc或~/.zshrc文件\n\n"
             "是否繼續？", 
@@ -196,6 +197,6 @@ class ApiSettingsDialog:
             messagebox.showerror(
                 "保存失敗", 
                 f"無法永久保存API密鑰：\n{message}\n\n"
-                "請嘗試手動設置系統環境變數。", 
+                f"請嘗試手動設置系統環境變數 {API_KEY_ENV_NAME}。", 
                 parent=self.dialog
             ) 

@@ -55,7 +55,13 @@
 
 ### 圖形界面模式
 
-運行GUI程序：
+運行GUI程序（推薦）：
+
+```
+python start_gui.py
+```
+
+或者直接運行主GUI模塊：
 
 ```
 python gemini_commenter_gui.py
@@ -78,12 +84,27 @@ python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [�
 - `--model`: Gemini模型名稱（默認：gemini-1.5-pro）
 - `--api-key`: 直接指定API密鑰（優先級高於環境變量）
 
+### 自動提交到GitHub
+
+```
+python auto_push_after_run.py [選項]
+```
+
+選項：
+- `--folder`, `-f`: 源文件夾路徑（默認：當前目錄）
+- `--output`, `-o`: 輸出文件夾路徑（默認：commented）
+- `--filter`: 文件過濾器，如：*.py,*.js,*.html（默認：*.py）
+- `--no-push`: 不推送到GitHub，僅生成註釋
+- `--no-gui`: 不使用GUI，使用命令行模式
+
 ## 項目結構
 
 ```
 .
 ├── gemini_commenter.py         # 命令行工具
 ├── gemini_commenter_gui.py     # 模塊化圖形界面工具
+├── start_gui.py                # GUI啟動腳本
+├── auto_push_after_run.py      # 自動提交到GitHub的腳本
 ├── api_key_manager.py          # API密鑰管理模塊
 ├── prompts.py                  # 提示詞模板
 ├── gui_modules/                # GUI模塊目錄
@@ -112,7 +133,7 @@ https://aistudio.google.com/
 
 ## 注意事項
 
-- API密鑰：您需要有一個有效的Google Gemini API密鑰
+- API密鑰：您需要有一個有效的Google Gemini API密鑰，並通過環境變量 `GEMINI_API_KEY` 設置
 - 文件大小：大文件處理可能需要更長時間
 - API限制：Gemini API有使用限制，請適當設置延遲時間
 - 處理時間：處理時間取決於文件數量、大小和API響應速度
@@ -120,6 +141,7 @@ https://aistudio.google.com/
 ## 許可證
 
 MIT
+
 ## 修復了html編碼 和速率問題
 # HTML文件編碼問題解決方案
 

@@ -30,6 +30,7 @@ commented_test/
 commented_test*/
 test_encoding_output/
 test_output/
+test_folder/
 
 # 测试脚本
 test_*.py

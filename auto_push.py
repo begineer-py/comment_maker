@@ -12,6 +12,7 @@ import subprocess
 import datetime
 import time
 import platform
+import argparse
 
 # GitHub倉庫URL
 GITHUB_REPO = "https://github.com/begineer-py/comment_maker.git"
@@ -61,7 +62,8 @@ def run_command(command, error_message=None):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding="utf-8"
+            encoding="utf-8",
+            errors="replace"
         )
         
         if result.returncode != 0:
@@ -144,10 +146,13 @@ def commit_changes():
     success, _ = run_command(["git", "commit", "-m", commit_message], "無法提交更改")
     return success
 
-def push_to_github():
+def push_to_github(force=False):
     """推送到GitHub"""
     print_colored("推送到GitHub...", "yellow")
-    success, output = run_command(["git", "push", "-u", "origin", "main"], "無法推送到GitHub")
+    if force:
+        success, output = run_command(["git", "push", "-u", "origin", "main", "-f"], "無法推送到GitHub")
+    else:
+        success, output = run_command(["git", "push", "-u", "origin", "main"], "無法推送到GitHub")
     
     # 如果推送失敗，可能是因為分支名稱不是main
     if not success and "main" in output:
@@ -161,6 +166,11 @@ def main():
     print_colored("=" * 50, "blue")
     print_colored("自動推送到GitHub腳本", "blue")
     print_colored("=" * 50, "blue")
+    
+    # 解析命令行參數
+    parser = argparse.ArgumentParser(description="自動推送到GitHub的腳本")
+    parser.add_argument("--force", "-F", action="store_true", help="使用強制推送")
+    args = parser.parse_args()
     
     # 檢查Git是否已安裝
     if not check_git_installed():
@@ -193,7 +203,7 @@ def main():
         return False
     
     # 推送到GitHub
-    if not push_to_github():
+    if not push_to_github(force=args.force):
         print_colored("無法推送到GitHub", "red")
         return False
     

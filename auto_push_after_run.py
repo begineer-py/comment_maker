@@ -122,8 +122,11 @@ def run_gemini_commenter(gui_mode=True, folder=None, output=None, recursive=Fals
     
     return success
 
-def push_to_github():
+def push_to_github(force=False):
     """推送到GitHub
+    
+    Args:
+        force: 是否使用強制推送
     
     Returns:
         bool: 是否成功
@@ -185,12 +188,24 @@ def push_to_github():
     
     # 推送到GitHub
     print_colored("推送到GitHub...", "yellow")
-    success, output = run_command(["git", "push", "-u", "origin", "main"], "無法推送到GitHub")
+    
+    # 根據force參數決定是否使用強制推送
+    push_command = ["git", "push"]
+    if force:
+        print_colored("使用強制推送...", "yellow")
+        push_command.append("-f")
+    
+    push_command.extend(["-u", "origin", "main"])
+    success, output = run_command(push_command, "無法推送到GitHub")
     
     # 如果推送失敗，可能是因為分支名稱不是main
     if not success and "main" in output:
         print_colored("嘗試使用master分支...", "yellow")
-        success, _ = run_command(["git", "push", "-u", "origin", "master"], "無法推送到GitHub")
+        push_command = ["git", "push"]
+        if force:
+            push_command.append("-f")
+        push_command.extend(["-u", "origin", "master"])
+        success, _ = run_command(push_command, "無法推送到GitHub")
     
     if success:
         print_colored("=" * 50, "green")
@@ -215,6 +230,7 @@ def main():
     parser.add_argument("--filter", default="*.py", help="文件過濾器，如：*.py,*.js,*.html")
     parser.add_argument("--comment-style", choices=["line_end", "line_start"], default="line_end", help="註釋風格")
     parser.add_argument("--no-push", action="store_true", help="不推送到GitHub")
+    parser.add_argument("--force", "-F", action="store_true", help="使用強制推送(git push -f)")
     args = parser.parse_args()
     
     # 運行Gemini代碼註釋器
@@ -240,8 +256,8 @@ def main():
     print_colored("等待文件寫入完成...", "yellow")
     time.sleep(2)
     
-    # 推送到GitHub
-    return push_to_github()
+    # 推送到GitHub，傳遞force參數
+    return push_to_github(force=args.force)
 
 if __name__ == "__main__":
     try:

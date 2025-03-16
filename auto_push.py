@@ -147,9 +147,19 @@ def commit_changes():
     return success
 
 def push_to_github(force=False):
-    """推送到GitHub"""
+    """推送到GitHub
+    
+    Args:
+        force: 是否使用強制推送
+        
+    Returns:
+        bool: 是否成功
+    """
     print_colored("推送到GitHub...", "yellow")
+    
     if force:
+        print_colored("使用強制推送，將完全覆蓋遠端分支...", "yellow")
+        # 使用--force-with-lease更安全，但如果需要完全覆蓋，可以使用-f
         success, output = run_command(["git", "push", "-u", "origin", "main", "-f"], "無法推送到GitHub")
     else:
         success, output = run_command(["git", "push", "-u", "origin", "main"], "無法推送到GitHub")
@@ -157,7 +167,10 @@ def push_to_github(force=False):
     # 如果推送失敗，可能是因為分支名稱不是main
     if not success and "main" in output:
         print_colored("嘗試使用master分支...", "yellow")
-        success, _ = run_command(["git", "push", "-u", "origin", "master"], "無法推送到GitHub")
+        if force:
+            success, _ = run_command(["git", "push", "-u", "origin", "master", "-f"], "無法推送到GitHub")
+        else:
+            success, _ = run_command(["git", "push", "-u", "origin", "master"], "無法推送到GitHub")
     
     return success
 

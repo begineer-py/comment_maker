@@ -172,7 +172,11 @@ def push_to_github(force=False):
     
     if not output.strip():
         print_colored("沒有需要提交的更改", "green")
-        return True
+        # 如果沒有更改但需要強制推送，仍然執行推送
+        if force:
+            print_colored("雖然沒有新的更改，但將執行強制推送以覆蓋遠端分支...", "yellow")
+        else:
+            return True
     
     # 添加所有更改
     print_colored("添加所有更改到暫存區...", "yellow")
@@ -193,7 +197,7 @@ def push_to_github(force=False):
     # 根據force參數決定是否使用強制推送
     push_command = ["git", "push"]
     if force:
-        print_colored("使用強制推送...", "yellow")
+        print_colored("使用強制推送，將完全覆蓋遠端分支...", "yellow")
         push_command.append("-f")
     
     push_command.extend(["-u", "origin", "main"])
@@ -211,6 +215,8 @@ def push_to_github(force=False):
     if success:
         print_colored("=" * 50, "green")
         print_colored("成功推送到GitHub！", "green")
+        if force:
+            print_colored("已完全覆蓋遠端分支", "green")
         print_colored("=" * 50, "green")
     
     return success

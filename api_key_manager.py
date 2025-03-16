@@ -4,19 +4,18 @@
 """
 API金鑰管理模組
 負責Gemini API金鑰的檢查、獲取和保存
-自動設置API金鑰環境變數
+從環境變數中讀取API金鑰
 """
 
 import os
 import sys
 import subprocess
 
-# 直接在代碼中設置API金鑰
-DEFAULT_API_KEY = "your-api-key"
+# 環境變數名稱
+API_KEY_ENV_NAME = "GEMINI_API_KEY"
 
-# 在模組導入時自動設置環境變數
-os.environ["GEMINI_API_KEY"] = DEFAULT_API_KEY
-print("[INFO] 已設置GEMINI_API_KEY環境變數")
+# 不再使用硬編碼的默認API密鑰
+print(f"[INFO] API金鑰將從環境變數 {API_KEY_ENV_NAME} 中讀取")
 
 def get_api_key():
     """從系統環境變數中獲取API金鑰
@@ -38,15 +37,13 @@ def get_api_key():
     print("="*50)
     
     # 檢查環境變數
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get(API_KEY_ENV_NAME)
     
-    # 如果環境變數中沒有API金鑰，使用默認值
+    # 如果環境變數中沒有API金鑰，返回None並提示用戶
     if not api_key:
-        print(f"[INFO] 未在環境變數中找到API金鑰，使用默認值")
-        api_key = DEFAULT_API_KEY
-        # 設置環境變數
-        os.environ["GEMINI_API_KEY"] = api_key
-        print(f"[INFO] 已設置GEMINI_API_KEY環境變數")
+        print(f"[WARNING] 未在環境變數中找到API金鑰 {API_KEY_ENV_NAME}")
+        print(f"[INFO] 請設置環境變數: {API_KEY_ENV_NAME}=your_api_key_here")
+        return None
     
     # 打印部分API金鑰信息，保護隱私
     masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
@@ -63,7 +60,7 @@ def is_valid_api_key(api_key):
     Returns:
         bool: 如果API金鑰有效則返回True，否則返回False
     """
-    if not api_key or api_key == "your_gemini_api_key_here":
+    if not api_key or api_key == "your_gemini_api_key_here" or api_key == "your-api-key":
         return False
     
     # 簡單檢查API金鑰是否為空或默認值
@@ -84,12 +81,12 @@ def save_api_key(api_key):
     
     try:
         # 設置當前進程的環境變數
-        os.environ["GEMINI_API_KEY"] = api_key
+        os.environ[API_KEY_ENV_NAME] = api_key
         
-        print(f"[INFO] API金鑰已設置為當前環境變數 GEMINI_API_KEY")
+        print(f"[INFO] API金鑰已設置為當前環境變數 {API_KEY_ENV_NAME}")
         
         # 驗證是否設置成功
-        if os.environ.get("GEMINI_API_KEY") == api_key:
+        if os.environ.get(API_KEY_ENV_NAME) == api_key:
             print(f"[INFO] 驗證成功: 環境變數已正確設置")
         else:
             print(f"[WARNING] 驗證失敗: 環境變數設置可能不成功")
@@ -98,10 +95,10 @@ def save_api_key(api_key):
         print(f"[INFO] 注意：此設置僅對當前程序有效")
         print(f"[INFO] 要永久保存環境變數，請按照以下步驟操作：")
         if sys.platform == 'win32':
-            print(f"[INFO] Windows: 系統屬性 -> 環境變數 -> 新建，變數名：GEMINI_API_KEY，變數值：{api_key}")
-            print(f"[INFO] 或者在PowerShell中運行: [System.Environment]::SetEnvironmentVariable('GEMINI_API_KEY', '{api_key}', 'User')")
+            print(f"[INFO] Windows: 系統屬性 -> 環境變數 -> 新建，變數名：{API_KEY_ENV_NAME}，變數值：{api_key}")
+            print(f"[INFO] 或者在PowerShell中運行: [System.Environment]::SetEnvironmentVariable('{API_KEY_ENV_NAME}', '{api_key}', 'User')")
         else:
-            print(f"[INFO] Linux/macOS: 在~/.bashrc或~/.zshrc中添加：export GEMINI_API_KEY={api_key}")
+            print(f"[INFO] Linux/macOS: 在~/.bashrc或~/.zshrc中添加：export {API_KEY_ENV_NAME}={api_key}")
         
         return True
             
@@ -123,14 +120,14 @@ def save_api_key_permanently(api_key):
     
     try:
         # 首先設置當前進程的環境變數
-        os.environ["GEMINI_API_KEY"] = api_key
+        os.environ[API_KEY_ENV_NAME] = api_key
         
         # 根據不同的操作系統執行不同的命令
         if sys.platform == 'win32':
             # Windows - 使用PowerShell設置用戶級環境變數
             try:
                 # 構建PowerShell命令
-                ps_command = f'[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "{api_key}", "User")'
+                ps_command = f'[System.Environment]::SetEnvironmentVariable("{API_KEY_ENV_NAME}", "{api_key}", "User")'
                 
                 # 執行PowerShell命令
                 print(f"[INFO] 執行PowerShell命令設置環境變數...")
@@ -143,7 +140,7 @@ def save_api_key_permanently(api_key):
                 
                 # 檢查命令執行結果
                 if result.returncode == 0:
-                    print(f"[INFO] 成功設置系統環境變數 GEMINI_API_KEY")
+                    print(f"[INFO] 成功設置系統環境變數 {API_KEY_ENV_NAME}")
                     return True, "API金鑰已成功永久保存到系統環境變數"
                 else:
                     error_msg = f"PowerShell命令執行失敗: {result.stderr}"
@@ -179,20 +176,20 @@ def save_api_key_permanently(api_key):
                     # 如果沒有找到配置文件，默認使用.bashrc
                     config_file = os.path.join(home_dir, ".bashrc")
                     
-                # 檢查文件中是否已經有GEMINI_API_KEY的設置
-                export_line = f'export GEMINI_API_KEY="{api_key}"'
+                # 檢查文件中是否已經有API_KEY_ENV_NAME的設置
+                export_line = f'export {API_KEY_ENV_NAME}="{api_key}"'
                 has_export = False
                 
                 if os.path.exists(config_file):
                     with open(config_file, 'r') as f:
                         content = f.read()
-                        if "export GEMINI_API_KEY=" in content:
+                        if f"export {API_KEY_ENV_NAME}=" in content:
                             has_export = True
                 
                 # 添加或更新環境變數設置
                 if has_export:
                     # 使用sed命令更新現有的設置
-                    sed_command = f"sed -i 's/export GEMINI_API_KEY=.*/export GEMINI_API_KEY=\"{api_key}\"/' {config_file}"
+                    sed_command = f"sed -i 's/export {API_KEY_ENV_NAME}=.*/export {API_KEY_ENV_NAME}=\"{api_key}\"/' {config_file}"
                     result = subprocess.run(sed_command, shell=True, capture_output=True, text=True, check=False)
                     
                     if result.returncode != 0:
@@ -226,9 +223,9 @@ def ensure_api_key():
     
     # 檢查API金鑰是否有效
     if not is_valid_api_key(api_key):
-        print("[WARNING] API金鑰無效或未設置，使用默認值")
-        api_key = DEFAULT_API_KEY
-        os.environ["GEMINI_API_KEY"] = api_key
+        print(f"[ERROR] API金鑰無效或未設置")
+        print(f"[INFO] 請設置環境變數: {API_KEY_ENV_NAME}=your_api_key_here")
+        return None
     
     return api_key
 
@@ -307,7 +304,7 @@ if __name__ == "__main__":
             print(f"API連接測試失敗: {error}")
     else:
         print("未能獲取有效的API金鑰")
-        print("請設置環境變數 GEMINI_API_KEY=your_api_key_here")
-        print("Windows PowerShell: $env:GEMINI_API_KEY = 'your_api_key_here'")
-        print("Windows CMD: set GEMINI_API_KEY=your_api_key_here")
-        print("Linux/macOS: export GEMINI_API_KEY=your_api_key_here") 
+        print(f"請設置環境變數 {API_KEY_ENV_NAME}=your_api_key_here")
+        print(f"Windows PowerShell: $env:{API_KEY_ENV_NAME} = 'your_api_key_here'")
+        print(f"Windows CMD: set {API_KEY_ENV_NAME}=your_api_key_here")
+        print(f"Linux/macOS: export {API_KEY_ENV_NAME}=your_api_key_here") 

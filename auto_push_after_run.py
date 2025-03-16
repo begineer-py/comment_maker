@@ -60,7 +60,8 @@ def run_command(command, error_message=None):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding="utf-8"
+            encoding="utf-8",
+            errors="replace"
         )
         
         if result.returncode != 0:

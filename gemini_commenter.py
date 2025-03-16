@@ -35,10 +35,16 @@ def setup_gemini_api(api_key, model_name="gemini-1.5-pro"):
             print("[INFO] 您可以設置系統環境變數: GEMINI_API_KEY=your_api_key_here")
             sys.exit(1)
     
-    # 測試API連接
-    success, error_msg = test_api_connection(api_key, model_name)
-    if not success:
-        print(f"[ERROR] 連接到 {model_name} 模型失敗: {error_msg}")
+    # 測試API連接，添加重試機制
+    max_retries = 3
+    base_wait_time = 10  # 基礎等待時間（秒）
+    
+    for attempt in range(max_retries):
+        success, error_msg = test_api_connection(api_key, model_name)
+        if success:
+            break
+            
+        print(f"[ERROR] 連接到 {model_name} 模型時出錯: {error_msg}")
         
         # 如果是API金鑰問題，嘗試重新獲取
         if "API金鑰無效" in error_msg or "未授權" in error_msg:
@@ -46,9 +52,20 @@ def setup_gemini_api(api_key, model_name="gemini-1.5-pro"):
             api_key = ensure_api_key()
             if api_key:
                 print("[INFO] 使用新的API金鑰重試...")
-                return setup_gemini_api(api_key, model_name)
+                continue
         
-        sys.exit(1)
+        # 如果是配額限制問題，等待更長時間後重試
+        if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
+            wait_time = base_wait_time * (2 ** attempt) + random.uniform(0, 5)
+            print(f"[WARNING] 檢測到API配額限制，等待 {wait_time:.2f} 秒後重試...")
+            time.sleep(wait_time)
+            continue
+            
+        # 如果是最後一次嘗試且仍然失敗，則退出
+        if attempt == max_retries - 1:
+            print(f"[ERROR] 連接到 {model_name} 模型失敗: {error_msg}")
+            print("[INFO] 請稍後再試或檢查您的API金鑰")
+            sys.exit(1)
     
     # 配置Gemini API
     genai.configure(api_key=api_key)
@@ -154,28 +171,50 @@ def generate_comments_for_code(model, code, file_path, comment_style='line_end',
                 match = re.search(code_pattern, commented_code, re.DOTALL)
                 if match:
                     commented_code = match.group(1)
+                else:
+                    # 如果沒有找到代碼塊，嘗試使用整個響應
+                    print("[WARNING] 未找到代碼塊，使用整個響應")
                 
-                # 確保返回的不是None
-                if commented_code is None:
-                    print("[WARNING] 提取的代碼為None，返回原始代碼")
-                    return code
+                # 檢查註釋後的代碼是否為空
+                if not commented_code or commented_code.strip() == "":
+                    print("[WARNING] 生成的註釋代碼為空，重試...")
+                    if attempt < max_retries - 1:
+                        wait_time = min((2 ** attempt) + random.random(), max_backoff)
+                        print(f"[INFO] 等待 {wait_time:.2f} 秒後重試...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print("[ERROR] 多次嘗試後生成的註釋代碼仍為空，返回原始代碼")
+                        return code
                 
                 return commented_code
-            except Exception as retry_error:
-                if "429" in str(retry_error) or "Too many requests" in str(retry_error):
-                    # 計算指數退避時間
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[ERROR] 生成註釋時出錯: {error_msg}")
+                
+                # 處理API配額限制錯誤
+                if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg or "rate limit" in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        wait_time = min((2 ** attempt) * 10 + random.uniform(0, 5), max_backoff)
+                        print(f"[WARNING] 檢測到API配額限制，等待 {wait_time:.2f} 秒後重試...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print("[ERROR] 多次嘗試後仍然遇到API配額限制，返回原始代碼")
+                        return code
+                
+                # 其他錯誤，如果還有重試次數，則等待後重試
+                if attempt < max_retries - 1:
                     wait_time = min((2 ** attempt) + random.random(), max_backoff)
-                    print(f"[WARNING] API請求頻率超限 (嘗試 {attempt+1}/{max_retries}): {retry_error}")
-                    print(f"[INFO] 退避 {wait_time:.2f} 秒...")
-                    time.sleep(wait_time)
-                elif attempt < max_retries - 1:
-                    # 其他錯誤也使用退避，但使用不同的消息
-                    wait_time = min((2 ** attempt) + random.random(), max_backoff)
-                    print(f"[WARNING] API請求失敗 (嘗試 {attempt+1}/{max_retries}): {retry_error}")
-                    print(f"[INFO] {wait_time:.2f} 秒後重試...")
+                    print(f"[INFO] 等待 {wait_time:.2f} 秒後重試...")
                     time.sleep(wait_time)
                 else:
-                    raise  # 重試次數用完，拋出異常
+                    print("[ERROR] 多次嘗試後仍然出錯，返回原始代碼")
+                    return code
+        
+        # 如果所有嘗試都失敗，返回原始代碼
+        return code
     except Exception as e:
         print(f"[ERROR] 生成註釋時出錯: {e}")
         return code  # 出錯時返回原始代碼
@@ -204,6 +243,11 @@ def process_file(model, file_path, output_folder, delay=6.0, comment_style='line
         successful_encoding = None
         encodings_to_try = ['utf-8', 'cp950', 'big5', 'gbk', 'latin-1']
         
+        # 對於HTML文件，優先嘗試UTF-8
+        if file_ext.lower() in ['.html', '.htm']:
+            print(f"[INFO] 檢測到HTML文件，優先嘗試UTF-8編碼")
+            encodings_to_try = ['utf-8'] + encodings_to_try
+        
         for encoding in encodings_to_try:
             try:
                 with open(file_path, 'r', encoding=encoding) as f:
@@ -226,7 +270,7 @@ def process_file(model, file_path, output_folder, delay=6.0, comment_style='line
                 if binary_data.startswith(b'\xef\xbb\xbf'):  # UTF-8 BOM
                     code = binary_data[3:].decode('utf-8')
                     print(f"[INFO] 檢測到UTF-8 BOM，成功解碼")
-                    successful_encoding = 'utf-8'
+                    successful_encoding = 'utf-8-sig'  # 使用-sig表示帶BOM的UTF-8
                 else:
                     # 最後嘗試使用latin-1（可以解碼任何字節）
                     code = binary_data.decode('latin-1')
@@ -262,8 +306,29 @@ def process_file(model, file_path, output_folder, delay=6.0, comment_style='line
             # 如果沒有成功的編碼，默認使用utf-8
             if not successful_encoding:
                 successful_encoding = 'utf-8'
+            
+            # 對於HTML文件，強制使用UTF-8編碼保存
+            if file_ext.lower() in ['.html', '.htm']:
+                print(f"[INFO] HTML文件將使用UTF-8編碼保存")
+                successful_encoding = 'utf-8'
+            
+            # 檢查註釋後的代碼是否可以使用檢測到的編碼進行編碼
+            try:
+                commented_code.encode(successful_encoding)
+            except UnicodeEncodeError:
+                print(f"[WARNING] 註釋後的代碼無法使用 {successful_encoding} 編碼，將改用UTF-8")
+                successful_encoding = 'utf-8'
                 
             print(f"[INFO] 使用 {successful_encoding} 編碼保存文件")
+            
+            # 對於HTML文件，添加適當的編碼聲明
+            if file_ext.lower() in ['.html', '.htm'] and '<meta charset=' not in commented_code.lower():
+                # 檢查是否有head標籤
+                if '<head>' in commented_code:
+                    commented_code = commented_code.replace('<head>', '<head>\n    <meta charset="UTF-8">')
+                    print(f"[INFO] 已添加UTF-8編碼聲明到HTML文件")
+            
+            # 使用檢測到的編碼保存文件
             with open(output_path, 'w', encoding=successful_encoding) as f:
                 f.write(commented_code)
             print(f"[INFO] 完成: {file_path} -> {output_path}")
@@ -278,12 +343,25 @@ def process_file(model, file_path, output_folder, delay=6.0, comment_style='line
             print(f"[ERROR] 保存文件時出錯: {e}")
             print(f"[INFO] 嘗試使用二進制模式保存文件")
             try:
+                # 對於HTML文件，確保使用UTF-8編碼
+                if file_ext.lower() in ['.html', '.htm']:
+                    encoding_to_use = 'utf-8'
+                else:
+                    encoding_to_use = successful_encoding
+                
                 with open(output_path, 'wb') as f:
-                    f.write(commented_code.encode(successful_encoding, errors='replace'))
-                print(f"[INFO] 使用二進制模式成功保存文件")
+                    f.write(commented_code.encode(encoding_to_use, errors='replace'))
+                print(f"[INFO] 使用二進制模式成功保存文件 (編碼: {encoding_to_use})")
             except Exception as e2:
                 print(f"[ERROR] 二進制保存也失敗: {e2}")
-                return False
+                # 最後嘗試保存原始代碼
+                try:
+                    with open(output_path, 'wb') as f:
+                        f.write(code.encode(successful_encoding, errors='replace'))
+                    print(f"[INFO] 已保存原始代碼")
+                except Exception as e3:
+                    print(f"[ERROR] 保存原始代碼也失敗: {e3}")
+                    return False
         
         # 添加隨機延遲，避免API請求過於規律
         actual_delay = delay + random.uniform(0, 2)

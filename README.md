@@ -10,13 +10,11 @@
 - 支持文件過濾器，可以指定要處理的文件類型
 - 支持API請求延遲和退避算法，避免API限制
 - 提供圖形界面和命令行兩種使用方式
-- 支持自動推送到GitHub
 
 ## 系統要求
 
 - Python 3.8+
 - Google Gemini API密鑰
-- Git（用於自動推送功能）
 
 ## 安裝
 
@@ -80,45 +78,6 @@ python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [�
 - `--model`: Gemini模型名稱（默認：gemini-1.5-pro）
 - `--api-key`: 直接指定API密鑰（優先級高於環境變量）
 
-## 自動推送到GitHub
-
-本項目提供了自動推送到GitHub的功能，可以定期將代碼更改推送到GitHub倉庫。
-
-### 手動推送
-
-運行以下命令手動推送代碼：
-
-```
-python auto_push.py
-```
-
-或者在Windows上運行：
-
-```
-auto_push.bat
-```
-
-在Linux/macOS上運行：
-
-```
-./auto_push.sh
-```
-
-### 設置定時任務
-
-運行以下命令設置定時任務，自動定期推送代碼：
-
-```
-python setup_auto_push.py
-```
-
-這將根據您的操作系統設置適當的定時任務：
-- Windows: 使用計劃任務（Task Scheduler）
-- Linux: 使用crontab
-- macOS: 使用launchd
-
-默認設置為每天凌晨2點自動推送代碼。
-
 ## 項目結構
 
 ```
@@ -132,10 +91,6 @@ python setup_auto_push.py
 │   ├── api_settings.py         # API設置模塊
 │   ├── file_processor.py       # 文件處理模塊
 │   └── ui_components.py        # UI組件模塊
-├── auto_push.py                # 自動推送腳本
-├── auto_push.bat               # Windows批處理文件
-├── auto_push.sh                # Linux/macOS Shell腳本
-├── setup_auto_push.py          # 設置定時任務腳本
 ├── requirements.txt            # 依賴庫列表
 └── README.md                   # 說明文檔
 ```
@@ -161,7 +116,6 @@ https://aistudio.google.com/
 - 文件大小：大文件處理可能需要更長時間
 - API限制：Gemini API有使用限制，請適當設置延遲時間
 - 處理時間：處理時間取決於文件數量、大小和API響應速度
-- 自動推送：使用自動推送功能前，請確保已正確配置Git
 
 ## 許可證
 

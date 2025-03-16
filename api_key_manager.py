@@ -12,7 +12,7 @@ import sys
 import subprocess
 
 # 直接在代碼中設置API金鑰
-DEFAULT_API_KEY = "AIzaSyD6NGzm0lbDrGEv7Pg0jxok-EwC1ImUNNs"
+DEFAULT_API_KEY = "your-api-key"
 
 # 在模組導入時自動設置環境變數
 os.environ["GEMINI_API_KEY"] = DEFAULT_API_KEY

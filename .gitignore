@@ -48,7 +48,8 @@ Thumbs.db
 # 自动推送脚本相关
 auto_push.log
 push_history.txt
-
+auto_push.py
+auto_push_after_run.py
 # 临时文件
 *.tmp
 *.bak

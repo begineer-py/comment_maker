@@ -1,190 +1,168 @@
-# Python代码自动注释工具
+# Gemini代碼註釋器
 
-这是一个使用Google Gemini API自动为Python文件添加逐行中文注释的工具。
+使用Google Gemini AI為代碼添加中文註釋的工具。
 
-## 功能特点
+## 功能特點
 
-- 自动扫描指定文件夹中的Python文件
-- 使用Gemini AI为每个文件生成逐行中文注释
-- 支持递归处理子文件夹
-- 保留原始代码结构，只添加注释
-- 输出到单独的文件夹，不修改原始文件
-- 提供图形用户界面(GUI)
-- 自动从环境变量中提取API密钥
-- 支持文件过滤，可处理不同类型的文件
+- 支持多種程式語言（Python、JavaScript、HTML、CSS等）
+- 支持行尾註釋和行前註釋兩種風格
+- 支持遞歸處理子文件夾
+- 支持文件過濾器，可以指定要處理的文件類型
+- 支持API請求延遲和退避算法，避免API限制
+- 提供圖形界面和命令行兩種使用方式
+- 支持自動推送到GitHub
 
-## 安装
+## 系統要求
 
-1. 克隆或下载本仓库
-2. 安装依赖：
+- Python 3.8+
+- Google Gemini API密鑰
+- Git（用於自動推送功能）
+
+## 安裝
+
+1. 克隆或下載本倉庫
+2. 安裝依賴庫：
    ```
    pip install -r requirements.txt
    ```
-3. 设置Gemini API密钥（以下方式任选其一）：
-   - 在`.env`文件中设置：
-     ```
-     GEMINI_API_KEY=your_gemini_api_key_here
-     ```
-   - 设置系统环境变量`GEMINI_API_KEY`
-   - 在GUI界面中输入
 
-## 获取Gemini API密钥
+## API密鑰設置
 
-要使用此工具，您需要一个有效的Google Gemini API密钥。以下是获取密钥的步骤：
+本工具需要使用Google Gemini API密鑰。您可以通過以下方式設置API密鑰：
 
-1. 访问 [Google AI Studio](https://ai.google.dev/)
-2. 登录您的Google账户
-3. 点击右上角的头像，然后选择"获取API密钥"
-4. 创建一个新的API密钥或使用现有的密钥
-5. 复制API密钥
-6. 将密钥设置为环境变量或保存到`.env`文件中
+### 方法1：設置系統環境變量（推薦）
 
-## API密钥优先级
+- Windows PowerShell:
+  ```
+  $env:GEMINI_API_KEY = "your_api_key_here"
+  ```
 
-工具按以下优先级查找API密钥：
+- Windows CMD:
+  ```
+  set GEMINI_API_KEY=your_api_key_here
+  ```
 
-1. GUI界面中手动输入的密钥
-2. 系统环境变量 `GEMINI_API_KEY`
-3. `.env` 文件中的 `GEMINI_API_KEY`
+- Linux/macOS:
+  ```
+  export GEMINI_API_KEY=your_api_key_here
+  ```
+
+### 方法2：在程序中輸入
+
+如果未設置環境變量，程序會提示您輸入API密鑰。您可以選擇：
+- 僅保存到當前會話（程序關閉後失效）
+- 永久保存到系統環境變量（需要管理員權限）
 
 ## 使用方法
 
-### 图形用户界面(GUI)
+### 圖形界面模式
 
-启动GUI界面（以下方式任选其一）：
+運行GUI程序：
 
-```bash
-# 方式1：直接启动GUI
+```
 python gemini_commenter_gui.py
-
-# 方式2：使用启动脚本（推荐）
-python start_gui.py
 ```
 
-也可以直接双击`start_gui.py`文件启动GUI界面。
-
-GUI界面提供以下功能：
-- 设置Gemini API密钥（自动从环境变量加载）
-- 选择源文件夹和输出文件夹
-- 选择是否递归处理子文件夹
-- 设置文件过滤器（默认：*.py）
-- 实时显示处理进度和日志
-- 一键打开输出文件夹
-- 主题切换（暗色/亮色）
-
-### 命令行界面（高级用户）
-
-如果您更喜欢使用命令行，也可以直接使用命令行界面：
-
-```bash
-python gemini_commenter.py
-```
-
-这将处理当前文件夹中的所有Python文件，并将注释后的文件保存到`./commented`文件夹。
-
-#### 命令行参数
-
-- `--folder`：指定要处理的文件夹路径（默认：当前文件夹）
-- `--output`：指定输出文件夹路径（默认：`./commented`）
-- `--recursive`：递归处理子文件夹中的Python文件
-- `--api-key`：直接提供Gemini API密钥（可选，优先使用环境变量）
-- `--filter`：文件过滤器（默认：*.py）
-
-示例：
-
-```bash
-# 处理指定文件夹中的所有Python文件
-python gemini_commenter.py --folder ./my_project
-
-# 递归处理所有子文件夹
-python gemini_commenter.py --recursive
-
-# 指定输出文件夹
-python gemini_commenter.py --output ./commented_files
-
-# 直接提供API密钥
-python gemini_commenter.py --api-key your_api_key_here
-
-# 处理所有JavaScript文件
-python gemini_commenter.py --filter "*.js"
-```
-
-## 示例
-
-原始Python文件：
-
-```python
-def fibonacci(n):
-    if n <= 0:
-        return []
-    elif n == 1:
-        return [0]
-    elif n == 2:
-        return [0, 1]
-    
-    fib_sequence = [0, 1]
-    for i in range(2, n):
-        fib_sequence.append(fib_sequence[i-1] + fib_sequence[i-2])
-    
-    return fib_sequence
-```
-
-添加注释后：
-
-```python
-# 定义一个函数，用于生成斐波那契数列
-def fibonacci(n):
-    # 如果n小于等于0，返回空列表
-    if n <= 0:
-        return []
-    # 如果n等于1，返回只包含0的列表
-    elif n == 1:
-        return [0]
-    # 如果n等于2，返回包含0和1的列表
-    elif n == 2:
-        return [0, 1]
-    
-    # 初始化斐波那契数列，包含前两个数字0和1
-    fib_sequence = [0, 1]
-    # 循环计算剩余的斐波那契数
-    for i in range(2, n):
-        # 每个数字是前两个数字的和
-        fib_sequence.append(fib_sequence[i-1] + fib_sequence[i-2])
-    
-    # 返回完整的斐波那契数列
-    return fib_sequence
-```
-
-## 常见问题解决
-
-### API密钥错误
-
-如果您看到以下错误：
+### 命令行模式
 
 ```
-错误: 配置Gemini API时出错: 400 API key not valid. Please pass a valid API key.
+python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [選項]
 ```
 
-请确保：
-1. 您已正确设置API密钥（环境变量或.env文件）
-2. API密钥是有效的
-3. 您的网络可以连接到Google服务
+選項：
+- `--folder`, `-f`: 源文件夾路徑（默認：當前目錄）
+- `--output`, `-o`: 輸出文件夾路徑（默認：commented）
+- `--recursive`, `-r`: 是否遞歸處理子文件夾
+- `--filter`: 文件過濾器，如：*.py,*.js,*.html（默認：*.py）
+- `--delay`, `-d`: API請求之間的延遲時間（秒）（默認：6.0）
+- `--max-backoff`: 最大退避時間（秒）（默認：64.0）
+- `--comment-style`: 註釋風格，line_end（行尾註釋）或line_start（行前註釋）（默認：line_end）
+- `--model`: Gemini模型名稱（默認：gemini-1.5-pro）
+- `--api-key`: 直接指定API密鑰（優先級高於環境變量）
 
-### 文件编码问题
+## 自動推送到GitHub
 
-如果处理文件时出现编码错误，请确保您的Python文件使用UTF-8编码。
+本項目提供了自動推送到GitHub的功能，可以定期將代碼更改推送到GitHub倉庫。
 
-### GUI界面问题
+### 手動推送
 
-如果GUI界面无法启动，请确保已安装所有依赖：
+運行以下命令手動推送代碼：
 
-```bash
-pip install -r requirements.txt
+```
+python auto_push.py
 ```
 
-## 注意事项
+或者在Windows上運行：
 
-- 需要有效的Gemini API密钥
-- 处理大量文件可能会消耗API配额
-- 对于非常复杂或特殊的代码，可能需要手动调整生成的注释
-- 此工具默认处理Python文件，但也可以通过文件过滤器处理其他类型的文件
+```
+auto_push.bat
+```
+
+在Linux/macOS上運行：
+
+```
+./auto_push.sh
+```
+
+### 設置定時任務
+
+運行以下命令設置定時任務，自動定期推送代碼：
+
+```
+python setup_auto_push.py
+```
+
+這將根據您的操作系統設置適當的定時任務：
+- Windows: 使用計劃任務（Task Scheduler）
+- Linux: 使用crontab
+- macOS: 使用launchd
+
+默認設置為每天凌晨2點自動推送代碼。
+
+## 項目結構
+
+```
+.
+├── gemini_commenter.py         # 命令行工具
+├── gemini_commenter_gui.py     # 模塊化圖形界面工具
+├── api_key_manager.py          # API密鑰管理模塊
+├── prompts.py                  # 提示詞模板
+├── gui_modules/                # GUI模塊目錄
+│   ├── __init__.py             # 模塊初始化文件
+│   ├── api_settings.py         # API設置模塊
+│   ├── file_processor.py       # 文件處理模塊
+│   └── ui_components.py        # UI組件模塊
+├── auto_push.py                # 自動推送腳本
+├── auto_push.bat               # Windows批處理文件
+├── auto_push.sh                # Linux/macOS Shell腳本
+├── setup_auto_push.py          # 設置定時任務腳本
+├── requirements.txt            # 依賴庫列表
+└── README.md                   # 說明文檔
+```
+
+## 模塊化結構說明
+
+GUI工具採用了模塊化結構，將功能分為多個模塊：
+
+- `api_settings.py`: 處理API密鑰設置和測試相關功能
+- `file_processor.py`: 處理文件處理相關功能
+- `ui_components.py`: 處理UI相關功能，包括日誌面板、狀態欄、設置面板等
+
+這種模塊化結構使代碼更加清晰、易於維護，並且避免了單個文件過於龐大。
+
+## 獲取API密鑰
+
+您可以從Google AI Studio獲取免費的Gemini API密鑰：
+https://aistudio.google.com/
+
+## 注意事項
+
+- API密鑰：您需要有一個有效的Google Gemini API密鑰
+- 文件大小：大文件處理可能需要更長時間
+- API限制：Gemini API有使用限制，請適當設置延遲時間
+- 處理時間：處理時間取決於文件數量、大小和API響應速度
+- 自動推送：使用自動推送功能前，請確保已正確配置Git
+
+## 許可證
+
+MIT

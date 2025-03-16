@@ -3,321 +3,393 @@ import glob
 import re
 import argparse
 import sys
-import time  # 导入time模块用于请求延迟
-import random  # 导入random模块用于随机延迟
-from dotenv import load_dotenv
+import time
+import random
 import google.generativeai as genai
 
-# 设置控制台编码
+# 導入提示詞模板
+from prompts import get_prompt_for_style
+# 導入API金鑰管理模組
+from api_key_manager import ensure_api_key, test_api_connection
+
+# 設置控制台編碼
 try:
-    # 尝试设置控制台编码为UTF-8
     if sys.platform == 'win32':
         import ctypes
         kernel32 = ctypes.windll.kernel32
-        kernel32.SetConsoleOutputCP(65001)  # 设置为UTF-8
-except:
-    pass
-
-# 加载环境变量
-load_dotenv()
-
-def get_api_key_from_environment():
-    """从环境变量中获取API密钥，优先级：系统环境变量 > .env文件"""
-    # 首先尝试从系统环境变量获取
-    api_key = os.environ.get("GEMINI_API_KEY")
-    
-    # 如果系统环境变量中没有，则从.env文件获取
-    if not api_key:
-        api_key = os.getenv("GEMINI_API_KEY")
-        
-    # 记录API密钥来源
-    if api_key:
-        if "GEMINI_API_KEY" in os.environ:
-            print("[INFO] API key found in system environment variables")
-        else:
-            print("[INFO] API key found in .env file")
-    
-    return api_key
-
-# 获取API密钥
-GEMINI_API_KEY = get_api_key_from_environment()
-if not GEMINI_API_KEY:
-    print("[ERROR] GEMINI_API_KEY not found")
-    print("[INFO] Please set your Gemini API key in .env file:")
-    print("GEMINI_API_KEY=your_api_key_here")
-    print("[INFO] Or set system environment variable GEMINI_API_KEY")
-    sys.exit(1)
-
-if GEMINI_API_KEY == "your_gemini_api_key_here":
-    print("[ERROR] Please replace the placeholder with your actual Gemini API key")
-    print("[INFO] Visit https://ai.google.dev/ to get your API key")
-    sys.exit(1)
-
-try:
-    # 配置Gemini API
-    genai.configure(api_key=GEMINI_API_KEY)
-
-    # 尝试不同的模型名称
-    models_to_try = ['gemini-pro', 'gemini-1.5-pro', 'gemini-1.0-pro']
-    model = None
-    
-    for model_name in models_to_try:
-        try:
-            print(f"[INFO] Trying to use {model_name} model...")
-            model = genai.GenerativeModel(model_name)
-            # 测试API连接
-            response = model.generate_content("Hello")
-            print(f"[INFO] Successfully connected using {model_name} model")
-            break  # 如果成功，跳出循环
-        except Exception as model_error:
-            print(f"[INFO] Failed to use {model_name} model: {model_error}")
-            continue  # 尝试下一个模型
-    
-    # 检查是否成功连接到任何模型
-    if model is None:
-        print("[ERROR] Failed to connect to any Gemini model. Please check your API key and network.")
-        sys.exit(1)
-        
+        kernel32.SetConsoleOutputCP(65001)  # 設置為UTF-8
 except Exception as e:
-    print(f"[ERROR] Error configuring Gemini API: {e}")
-    print("[INFO] Please make sure your API key is valid and your network can connect to Google services")
-    sys.exit(1)
+    print(f"[WARNING] 設置控制台編碼失敗: {e}")
 
-def parse_arguments():
-    """解析命令行参数"""
-    parser = argparse.ArgumentParser(description='使用Gemini API为Python文件添加逐行注释')
-    parser.add_argument('--folder', type=str, default='.',
-                        help='要处理的文件夹路径 (默认: 当前文件夹)')
-    parser.add_argument('--output', type=str, default='commented',
-                        help='输出文件夹路径 (默认: ./commented)')
-    parser.add_argument('--recursive', action='store_true',
-                        help='是否递归处理子文件夹')
-    parser.add_argument('--api-key', type=str,
-                        help='Gemini API密钥 (可选，优先使用环境变量)')
-    parser.add_argument('--filter', type=str, default='*.py',
-                        help='文件过滤器 (默认: *.py)')
-    parser.add_argument('--delay', type=float, default=6.0,
-                        help='API请求之间的基础延迟时间(秒) (默认: 6.0秒)')
-    parser.add_argument('--max-backoff', type=float, default=64.0,
-                        help='最大退避延迟时间(秒) (默认: 64.0秒)')
-    parser.add_argument('--comment-style', type=str, choices=['line_start', 'line_end'], default='line_end',
-                        help='注释风格: line_start (行前注释) 或 line_end (行尾注释) (默认: line_end)')
+def setup_gemini_api(api_key, model_name="gemini-1.5-pro"):
+    """設置Gemini API並返回模型實例"""
+    # 如果API金鑰為空，嘗試重新獲取
+    if not api_key:
+        print("[WARNING] API金鑰未提供")
+        api_key = ensure_api_key()  # 使用API金鑰管理模組獲取API金鑰
+        
+        # 如果仍然為空，則退出
+        if not api_key:
+            print("[ERROR] 無法獲取有效的API金鑰，程序將退出")
+            print("[INFO] 請確保您有一個有效的Gemini API金鑰")
+            print("[INFO] 您可以設置系統環境變數: GEMINI_API_KEY=your_api_key_here")
+            sys.exit(1)
+    
+    # 測試API連接
+    success, error_msg = test_api_connection(api_key, model_name)
+    if not success:
+        print(f"[ERROR] 連接到 {model_name} 模型失敗: {error_msg}")
+        
+        # 如果是API金鑰問題，嘗試重新獲取
+        if "API金鑰無效" in error_msg or "未授權" in error_msg:
+            print("[INFO] 嘗試重新獲取API金鑰...")
+            api_key = ensure_api_key()
+            if api_key:
+                print("[INFO] 使用新的API金鑰重試...")
+                return setup_gemini_api(api_key, model_name)
+        
+        sys.exit(1)
+    
+    # 配置Gemini API
+    genai.configure(api_key=api_key)
+    
+    # 創建模型實例
+    print(f"[INFO] 使用 {model_name} 模型...")
+    model = genai.GenerativeModel(model_name)
+    return model
+
+def parse_args():
+    """解析命令行參數"""
+    parser = argparse.ArgumentParser(description="使用Gemini AI為代碼文件添加中文註釋")
+    parser.add_argument("--folder", "-f", type=str, default=".", help="包含代碼文件的文件夾路徑")
+    parser.add_argument("--output", "-o", type=str, default="commented", help="輸出文件夾路徑")
+    parser.add_argument("--recursive", "-r", action="store_true", help="是否遞歸處理子文件夾")
+    parser.add_argument("--filter", type=str, default="*.py", help="文件過濾器，如: *.py,*.js,*.java")
+    parser.add_argument("--delay", "-d", type=float, default=6.0, help="API請求之間的延遲(秒)")
+    parser.add_argument("--max-backoff", type=float, default=64.0, help="最大退避時間(秒)")
+    parser.add_argument("--comment-style", type=str, choices=["line_end", "line_start"], default="line_end", 
+                      help="註釋風格: line_end(行尾註釋)或line_start(行前註釋)")
+    parser.add_argument("--model", type=str, default="gemini-1.5-pro", 
+                      help="Gemini模型名稱，如: gemini-1.5-pro, gemini-1.0-pro, gemini-pro")
+    parser.add_argument("--api-key", type=str, help="Gemini API金鑰，優先級高於環境變數")
+    
     return parser.parse_args()
 
-def get_python_files(folder_path, recursive=False, file_filter='*.py'):
-    """获取指定文件夹中的所有Python文件"""
-    pattern = os.path.join(folder_path, '**', file_filter) if recursive else os.path.join(folder_path, file_filter)
-    return glob.glob(pattern, recursive=recursive)
+def get_code_files(folder_path, recursive=False, file_filter='*.py'):
+    """獲取指定文件夾中的所有代碼文件
+    
+    Args:
+        folder_path: 文件夾路徑
+        recursive: 是否遞歸處理子文件夾
+        file_filter: 文件過濾器，支持多個過濾器，用逗號分隔
+        
+    Returns:
+        list: 符合條件的文件路徑列表
+    """
+    all_files = []
+    
+    # 處理多個文件過濾器
+    filters = [f.strip() for f in file_filter.split(',')]
+    
+    for filter_pattern in filters:
+        pattern = os.path.join(folder_path, '**', filter_pattern) if recursive else os.path.join(folder_path, filter_pattern)
+        files = glob.glob(pattern, recursive=recursive)
+        all_files.extend(files)
+    
+    return sorted(list(set(all_files)))  # 去重並排序
 
-def generate_comments_for_code(code, comment_style='line_end'):
-    """使用Gemini API为代码生成逐行注释"""
-    if comment_style == 'line_end':
-        prompt = f"""
-        请为以下Python代码添加中文注释。
+def get_file_extension(file_path):
+    """獲取文件擴展名
+    
+    Args:
+        file_path: 文件路徑
         
-        重要规则：
-        1. 只使用行尾注释，即在代码行后面添加 # 后跟注释内容
-        2. 不要添加行前注释，避免缩进错误
-        3. 不要修改原始代码的任何部分，包括空行和缩进
-        4. 对于已有注释的行，保持原样不变
-        5. 注释应简洁明了地解释该行代码的功能
-        6. 空行不需要添加注释
+    Returns:
+        str: 文件擴展名（包含點，如.py）
+    """
+    return os.path.splitext(file_path)[1].lower()
+
+def generate_comments_for_code(model, code, file_path, comment_style='line_end', max_retries=5, max_backoff=64):
+    """使用Gemini API為代碼生成逐行註釋
+    
+    Args:
+        model: Gemini模型實例
+        code: 代碼內容
+        file_path: 文件路徑
+        comment_style: 註釋風格
+        max_retries: 最大重試次數
+        max_backoff: 最大退避時間
         
-        示例：
-        ```python
-        def hello(name):  # 定义一个打招呼的函数，接收name参数
-            greeting = "Hello, " + name  # 创建问候语字符串
-            return greeting  # 返回问候语
-        ```
-        
-        代码:
-        ```python
-        {code}
-        ```
-        
-        请返回带有行尾注释的完整代码。
-        """
-    else:  # line_start
-        prompt = f"""
-        请为以下Python代码添加逐行中文注释。
-        
-        重要规则：
-        1. 在每行代码前添加注释，使用 # 开头
-        2. 保持与代码相同的缩进级别，确保注释和代码对齐
-        3. 不要修改原始代码的任何部分
-        4. 对于已有注释的行，保持原样不变
-        5. 注释应简洁明了地解释该行代码的功能
-        6. 空行不需要添加注释
-        
-        示例：
-        ```python
-        # 定义一个打招呼的函数，接收name参数
-        def hello(name):
-            # 创建问候语字符串
-            greeting = "Hello, " + name
-            # 返回问候语
-            return greeting
-        ```
-        
-        代码:
-        ```python
-        {code}
-        ```
-        
-        请返回带有行前注释的完整代码。
-        """
+    Returns:
+        str: 添加註釋後的代碼
+    """
+    # 獲取文件名
+    file_name = os.path.basename(file_path)
+    file_ext = get_file_extension(file_path)
+    
+    # 獲取對應風格的提示詞，並添加文件名信息
+    prompt = get_prompt_for_style(code, comment_style, file_name)
     
     try:
-        # 实现指数退避算法
-        max_retries = 5
-        base_delay = 1  # 基础延迟时间(秒)
-        max_backoff = 64  # 最大退避时间(秒)
-        
         for attempt in range(max_retries):
             try:
                 response = model.generate_content(prompt)
                 
-                # 检查响应是否为空
+                # 檢查響應是否為空
                 if not response or not hasattr(response, 'text') or not response.text:
-                    print(f"[WARNING] API返回空响应 (attempt {attempt+1}/{max_retries})")
+                    print(f"[WARNING] API返回空響應 (嘗試 {attempt+1}/{max_retries})")
                     if attempt < max_retries - 1:
                         wait_time = min((2 ** attempt) + random.random(), max_backoff)
-                        print(f"[INFO] 等待 {wait_time:.2f} 秒后重试...")
+                        print(f"[INFO] 等待 {wait_time:.2f} 秒後重試...")
                         time.sleep(wait_time)
                         continue
                     else:
-                        print("[ERROR] 多次尝试后API仍返回空响应，返回原始代码")
+                        print("[ERROR] 多次嘗試後API仍返回空響應，返回原始代碼")
                         return code
                 
                 commented_code = response.text
                 
-                # 提取代码块
-                code_pattern = r"```python\n(.*?)\n```"
+                # 提取代碼塊 - 使用通用正則表達式
+                code_pattern = r"```.*?\n(.*?)\n```"
                 match = re.search(code_pattern, commented_code, re.DOTALL)
                 if match:
                     commented_code = match.group(1)
                 
-                # 确保返回的不是None
+                # 確保返回的不是None
                 if commented_code is None:
-                    print("[WARNING] 提取的代码为None，返回原始代码")
+                    print("[WARNING] 提取的代碼為None，返回原始代碼")
                     return code
                 
                 return commented_code
             except Exception as retry_error:
                 if "429" in str(retry_error) or "Too many requests" in str(retry_error):
-                    # 计算指数退避时间
+                    # 計算指數退避時間
                     wait_time = min((2 ** attempt) + random.random(), max_backoff)
-                    print(f"[WARNING] API rate limit exceeded (attempt {attempt+1}/{max_retries}): {retry_error}")
-                    print(f"[INFO] Backing off for {wait_time:.2f} seconds...")
+                    print(f"[WARNING] API請求頻率超限 (嘗試 {attempt+1}/{max_retries}): {retry_error}")
+                    print(f"[INFO] 退避 {wait_time:.2f} 秒...")
                     time.sleep(wait_time)
                 elif attempt < max_retries - 1:
-                    # 其他错误也使用退避，但使用不同的消息
+                    # 其他錯誤也使用退避，但使用不同的消息
                     wait_time = min((2 ** attempt) + random.random(), max_backoff)
-                    print(f"[WARNING] API request failed (attempt {attempt+1}/{max_retries}): {retry_error}")
-                    print(f"[INFO] Retrying in {wait_time:.2f} seconds...")
+                    print(f"[WARNING] API請求失敗 (嘗試 {attempt+1}/{max_retries}): {retry_error}")
+                    print(f"[INFO] {wait_time:.2f} 秒後重試...")
                     time.sleep(wait_time)
                 else:
-                    raise  # 重试次数用完，抛出异常
+                    raise  # 重試次數用完，拋出異常
     except Exception as e:
-        print(f"[ERROR] Error generating comments: {e}")
-        return code  # 出错时返回原始代码
+        print(f"[ERROR] 生成註釋時出錯: {e}")
+        return code  # 出錯時返回原始代碼
 
-def process_file(file_path, output_folder, delay=6.0, comment_style='line_end'):
-    """处理单个Python文件，添加注释并保存到输出文件夹"""
+def process_file(model, file_path, output_folder, delay=6.0, comment_style='line_end', max_backoff=64.0):
+    """處理單個代碼文件，添加註釋並保存到輸出文件夾
+    
+    Args:
+        model: Gemini模型實例
+        file_path: 文件路徑
+        output_folder: 輸出文件夾
+        delay: 請求延遲時間
+        comment_style: 註釋風格
+        max_backoff: 最大退避時間
+        
+    Returns:
+        bool: 處理是否成功
+    """
     try:
-        print(f"[INFO] Processing: {file_path}")
+        # 獲取文件擴展名
+        file_ext = get_file_extension(file_path)
+        print(f"[INFO] 處理中: {file_path} (擴展名: {file_ext})")
         
-        # 读取文件内容
-        with open(file_path, 'r', encoding='utf-8') as f:
-            code = f.read()
+        # 讀取文件內容 - 增加錯誤處理和多種編碼嘗試
+        code = None
+        successful_encoding = None
+        encodings_to_try = ['utf-8', 'cp950', 'big5', 'gbk', 'latin-1']
         
-        # 生成注释
-        commented_code = generate_comments_for_code(code, comment_style)
+        for encoding in encodings_to_try:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    code = f.read()
+                print(f"[INFO] 成功使用 {encoding} 編碼讀取文件")
+                successful_encoding = encoding
+                break
+            except UnicodeDecodeError:
+                print(f"[WARNING] 無法使用 {encoding} 編碼讀取文件，嘗試其他編碼...")
+            except Exception as e:
+                print(f"[ERROR] 讀取文件時出錯 ({encoding}): {e}")
         
-        # 确保commented_code不是None
-        if commented_code is None:
-            print(f"[ERROR] 生成的注释代码为None，跳过保存: {file_path}")
+        # 如果所有編碼都失敗，嘗試二進制讀取
+        if code is None:
+            try:
+                print(f"[WARNING] 所有文本編碼嘗試失敗，嘗試二進制讀取...")
+                with open(file_path, 'rb') as f:
+                    binary_data = f.read()
+                # 嘗試檢測BOM並解碼
+                if binary_data.startswith(b'\xef\xbb\xbf'):  # UTF-8 BOM
+                    code = binary_data[3:].decode('utf-8')
+                    print(f"[INFO] 檢測到UTF-8 BOM，成功解碼")
+                    successful_encoding = 'utf-8'
+                else:
+                    # 最後嘗試使用latin-1（可以解碼任何字節）
+                    code = binary_data.decode('latin-1')
+                    print(f"[INFO] 使用latin-1編碼成功讀取文件")
+                    successful_encoding = 'latin-1'
+            except Exception as e:
+                print(f"[ERROR] 二進制讀取文件失敗: {e}")
+                return False
+        
+        # 如果仍然無法讀取文件，則退出
+        if code is None:
+            print(f"[ERROR] 無法讀取文件 {file_path}，跳過處理")
             return False
         
-        # 创建输出文件夹
+        # 生成註釋
+        commented_code = generate_comments_for_code(model, code, file_path, comment_style, max_retries=5, max_backoff=max_backoff)
+        
+        # 確保commented_code不是None
+        if commented_code is None:
+            print(f"[ERROR] 生成的註釋代碼為None，跳過保存: {file_path}")
+            return False
+        
+        # 創建輸出文件夾
         os.makedirs(output_folder, exist_ok=True)
         
-        # 确定输出文件路径
+        # 確定輸出文件路徑
         rel_path = os.path.relpath(file_path, os.path.dirname(output_folder))
         output_path = os.path.join(output_folder, rel_path)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # 保存注释后的代码
+        # 保存註釋後的代碼 - 使用與讀取相同的編碼
         try:
-            with open(output_path, 'w', encoding='utf-8') as f:
+            # 如果沒有成功的編碼，默認使用utf-8
+            if not successful_encoding:
+                successful_encoding = 'utf-8'
+                
+            print(f"[INFO] 使用 {successful_encoding} 編碼保存文件")
+            with open(output_path, 'w', encoding=successful_encoding) as f:
                 f.write(commented_code)
-            print(f"[INFO] Completed: {file_path} -> {output_path}")
+            print(f"[INFO] 完成: {file_path} -> {output_path}")
         except TypeError as te:
-            print(f"[ERROR] 写入文件时类型错误: {te}")
-            print(f"[INFO] 尝试将None转换为空字符串并保存原始代码")
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(code)  # 保存原始代码
-            print(f"[INFO] 已保存原始代码: {output_path}")
+            print(f"[ERROR] 寫入文件時類型錯誤: {te}")
+            print(f"[INFO] 嘗試將None轉換為空字符串並保存原始代碼")
+            with open(output_path, 'w', encoding=successful_encoding) as f:
+                f.write(code)  # 保存原始代碼
+            print(f"[INFO] 已保存原始代碼: {output_path}")
             return False
+        except Exception as e:
+            print(f"[ERROR] 保存文件時出錯: {e}")
+            print(f"[INFO] 嘗試使用二進制模式保存文件")
+            try:
+                with open(output_path, 'wb') as f:
+                    f.write(commented_code.encode(successful_encoding, errors='replace'))
+                print(f"[INFO] 使用二進制模式成功保存文件")
+            except Exception as e2:
+                print(f"[ERROR] 二進制保存也失敗: {e2}")
+                return False
         
-        # 添加随机延迟，避免API请求过于规律
+        # 添加隨機延遲，避免API請求過於規律
         actual_delay = delay + random.uniform(0, 2)
-        print(f"[INFO] Waiting for {actual_delay:.2f} seconds before next request...")
+        print(f"[INFO] 等待 {actual_delay:.2f} 秒後進行下一個請求...")
         time.sleep(actual_delay)
         
         return True
     except Exception as e:
-        print(f"[ERROR] Error processing file {file_path}: {e}")
+        print(f"[ERROR] 處理文件 {file_path} 時出錯: {e}")
         import traceback
         traceback.print_exc()
         return False
 
-def main():
-    """主函数"""
-    args = parse_arguments()
+def process_folder(folder, output_folder, recursive=False, file_filter="*.py", model=None, delay=6.0, max_backoff=64.0, comment_style="line_end"):
+    """處理文件夾中的所有代碼文件
     
-    # 如果命令行提供了API密钥，则使用命令行提供的API密钥
-    global GEMINI_API_KEY
-    if args.api_key:
-        GEMINI_API_KEY = args.api_key
-        print("[INFO] Using API key provided in command line")
-        # 重新配置API
-        genai.configure(api_key=GEMINI_API_KEY)
+    Args:
+        folder: 源文件夾路徑
+        output_folder: 輸出文件夾路徑
+        recursive: 是否遞歸處理子文件夾
+        file_filter: 文件過濾器，如: *.py,*.js,*.java
+        model: Gemini模型實例
+        delay: 請求延遲時間
+        max_backoff: 最大退避時間
+        comment_style: 註釋風格
+        
+    Returns:
+        tuple: (成功處理的文件數, 總文件數)
+    """
+    # 獲取代碼文件列表
+    code_files = get_code_files(folder, recursive, file_filter)
     
-    # 获取Python文件列表
-    python_files = get_python_files(args.folder, args.recursive, args.filter)
+    if not code_files:
+        print(f"[INFO] 未找到匹配 {file_filter} 的文件在 {folder} 中")
+        return (0, 0)
     
-    if not python_files:
-        print(f"[INFO] No files matching {args.filter} found in {args.folder}")
-        return
+    print(f"[INFO] 找到 {len(code_files)} 個文件")
+    print(f"[INFO] 速率限制: 使用 {delay} 秒基礎延遲和指數退避算法")
+    print(f"[INFO] 註釋風格: {'行尾註釋' if comment_style == 'line_end' else '行前註釋'}")
     
-    print(f"[INFO] Found {len(python_files)} files")
-    print(f"[INFO] Rate limiting: Using {args.delay} seconds base delay between requests with exponential backoff")
-    print(f"[INFO] Comment style: {'Line end comments' if args.comment_style == 'line_end' else 'Line start comments'}")
-    
-    # 处理每个文件
+    # 處理每個文件
     success_count = 0
     total_count = 0
     
-    for file_path in python_files:
-        # 跳过输出文件夹中的文件
-        if os.path.abspath(args.output) in os.path.abspath(file_path):
+    for file_path in code_files:
+        # 跳過輸出文件夾中的文件
+        if os.path.abspath(output_folder) in os.path.abspath(file_path):
             continue
             
-        # 跳过当前脚本
-        if os.path.samefile(file_path, __file__):
+        # 跳過當前腳本和API金鑰管理模組
+        if os.path.samefile(file_path, __file__) or os.path.basename(file_path) == "api_key_manager.py":
             continue
         
         total_count += 1
         current_file_num = total_count
-        total_files = len(python_files)
-        print(f"[INFO] Processing file {current_file_num}/{total_files}: {file_path}")
+        total_files = len(code_files)
+        
+        # 獲取文件擴展名
+        file_ext = get_file_extension(file_path)
+        print(f"[INFO] 處理文件 {current_file_num}/{total_files}: {file_path} (擴展名: {file_ext})")
             
-        if process_file(file_path, args.output, args.delay, args.comment_style):
+        if process_file(model, file_path, output_folder, delay, comment_style, max_backoff):
             success_count += 1
-            print(f"[INFO] Progress: {success_count}/{total_count} files completed successfully")
+            print(f"[INFO] 進度: {success_count}/{total_count} 個文件成功處理")
     
-    print(f"[INFO] Processing completed: {success_count}/{total_count} files successfully commented")
+    print(f"[INFO] 處理完成: {success_count}/{total_count} 個文件成功添加註釋")
+    # 添加GUI友好的輸出格式，確保GUI能夠正確解析處理結果
+    print(f"Processing completed: {success_count}/{total_count} files successfully commented")
+    return (success_count, total_count)
+
+def main():
+    """主函數"""
+    # 解析命令行參數
+    args = parse_args()
+    
+    # 獲取API金鑰 - 優先使用命令行參數
+    api_key = args.api_key
+    if not api_key:
+        api_key = ensure_api_key()
+    
+    # 如果API金鑰為空，則退出
+    if not api_key:
+        print("[ERROR] 未找到有效的API金鑰，程序將退出")
+        print("[INFO] 請確保您有一個有效的Gemini API金鑰")
+        print("[INFO] 您可以設置系統環境變數: GEMINI_API_KEY=your_api_key_here")
+        print("[INFO] 或者使用--api-key參數直接傳遞API金鑰")
+        sys.exit(1)
+    
+    # 打印API金鑰信息（部分隱藏）
+    masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
+    print(f"[INFO] 使用API金鑰: {masked_key} (長度: {len(api_key)})")
+    
+    # 設置Gemini API
+    model = setup_gemini_api(api_key, args.model)
+    
+    # 處理文件夾
+    process_folder(
+        args.folder, 
+        args.output, 
+        args.recursive, 
+        args.filter, 
+        model, 
+        args.delay, 
+        args.max_backoff,
+        args.comment_style
+    )
 
 if __name__ == "__main__":
     main() 

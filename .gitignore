@@ -50,6 +50,7 @@ auto_push.log
 push_history.txt
 auto_push.py
 auto_push_after_run.py
+force_push.py
 # 临时文件
 *.tmp
 *.bak

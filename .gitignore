@@ -19,7 +19,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-
+*.venv
+*.vscode
 # 环境变量文件
 .env
 .env.*

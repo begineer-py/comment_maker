@@ -20,7 +20,7 @@
 
 1. 克隆或下載本倉庫
 2. 安裝依賴庫：
-   ```
+   ```bash
    pip install -r requirements.txt
    ```
 
@@ -31,17 +31,17 @@
 ### 方法1：設置系統環境變量（推薦）
 
 - Windows PowerShell:
-  ```
+  ```powershell
   $env:GEMINI_API_KEY = "your_api_key_here"
   ```
 
 - Windows CMD:
-  ```
+  ```cmd
   set GEMINI_API_KEY=your_api_key_here
   ```
 
 - Linux/macOS:
-  ```
+  ```bash
   export GEMINI_API_KEY=your_api_key_here
   ```
 
@@ -57,19 +57,19 @@
 
 運行GUI程序（推薦）：
 
-```
+```bash
 python start_gui.py
 ```
 
 或者直接運行主GUI模塊：
 
-```
+```bash
 python gemini_commenter_gui.py
 ```
 
 ### 命令行模式
 
-```
+```bash
 python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [選項]
 ```
 
@@ -86,7 +86,7 @@ python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [�
 
 ### 自動提交到GitHub
 
-```
+```bash
 python auto_push_after_run.py [選項]
 ```
 
@@ -101,28 +101,34 @@ python auto_push_after_run.py [選項]
 
 ```
 .
+├── .gitignore                  # Git忽略文件
+├── api_key_setting/            # API密鑰設置相關模塊目錄
+│   ├── api_key_manager.py      # API密鑰管理模塊
+│   └── api_settings.py         # API設置模塊
+├── auto_push_after_run.py      # 自動提交到GitHub的腳本
+├── config.yaml                 # 配置文件
+├── file_hander/                # 文件處理相關模塊目錄
+│   └── file_processor.py       # 文件處理模塊
 ├── gemini_commenter.py         # 命令行工具
 ├── gemini_commenter_gui.py     # 模塊化圖形界面工具
-├── start_gui.py                # GUI啟動腳本
-├── auto_push_after_run.py      # 自動提交到GitHub的腳本
-├── api_key_manager.py          # API密鑰管理模塊
-├── prompts.py                  # 提示詞模板
 ├── gui_modules/                # GUI模塊目錄
 │   ├── __init__.py             # 模塊初始化文件
-│   ├── api_settings.py         # API設置模塊
-│   ├── file_processor.py       # 文件處理模塊
 │   └── ui_components.py        # UI組件模塊
+├── LICENSE.txt                 # 許可證文件
+├── prompts.py                  # 提示詞模板
+├── README.md                   # 說明文檔
 ├── requirements.txt            # 依賴庫列表
-└── README.md                   # 說明文檔
+├── start_gui.py                # GUI啟動腳本
+└── nyaproxy/                   # NyaProxy 相關文件目錄
 ```
 
 ## 模塊化結構說明
 
 GUI工具採用了模塊化結構，將功能分為多個模塊：
 
-- `api_settings.py`: 處理API密鑰設置和測試相關功能
-- `file_processor.py`: 處理文件處理相關功能
-- `ui_components.py`: 處理UI相關功能，包括日誌面板、狀態欄、設置面板等
+- `api_key_setting/api_settings.py`: 處理API密鑰設置和測試相關功能
+- `file_hander/file_processor.py`: 處理文件處理相關功能
+- `gui_modules/ui_components.py`: 處理UI相關功能，包括日誌面板、狀態欄、設置面板等
 
 這種模塊化結構使代碼更加清晰、易於維護，並且避免了單個文件過於龐大。
 
@@ -133,18 +139,24 @@ https://aistudio.google.com/
 
 ## 注意事項
 
-- API密鑰：您需要有一個有效的Google Gemini API密鑰，並通過環境變量 `GEMINI_API_KEY` 設置
-- 文件大小：大文件處理可能需要更長時間
-- API限制：Gemini API有使用限制，請適當設置延遲時間
-- 處理時間：處理時間取決於文件數量、大小和API響應速度
+- **API密鑰**：您需要有一個有效的Google Gemini API密鑰，並通過環境變量 `GEMINI_API_KEY` 設置。
+- **文件大小**：處理大型文件可能需要較長時間。
+- **API限制**：Gemini API有使用限制，請適當設置延遲時間以避免觸發限制。
+- **處理時間**：處理時間取決於文件數量、大小和API響應速度。
+- **多API密鑰輪詢 (透過 NyaProxy)**：為了解決Google Gemini API的頻繁額度限制問題，本專案支援透過 `nyaproxy` 進行多個API密鑰的輪詢使用。詳情請參閱 NyaProxy 專案連結。
 
 ## 許可證
 
 MIT
 
-##近期發現API額度老是不夠用，但是可以申請多個API密鑰，放到nayproxy裏面輪詢使用，這樣就能夠解決API額度不夠用的問題,因此我設立了ntaproxy資料夾.
-你可能會好奇爲何不放到一個文件裏面，這樣會更方便，但是這樣會導致一個問題，就是如果一個API密鑰用完了，我要寫一大段代碼來處理這個問題，這樣會使代碼變得複雜，因此我選擇請專業的nyaproxy來處理這個問題,不用害怕nyaproxy的代碼複雜，因為我會給你config.yml範例，你只需要修改裏面的api_key即可,nyaproxy非常好用,我也推薦一般知識蒸餾使用.
+## NyaProxy 專案連結
+https://github.com/Nya-Foundation/NyaProxy
 
-## nyaproxy網站
-https://github.com/Nya-Foundation/NyaProxy 
-感謝大佬!
+## NyaProxy docker 部署命令
+
+```bash
+docker run -d \
+  -p 8964:8080 \
+  -v ${PWD}/config.yaml:/app/config.yaml \
+  -v nya-proxy-logs:/app/logs \
+  k3scat/nya-proxy:latest

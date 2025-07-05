@@ -142,4 +142,9 @@ https://aistudio.google.com/
 
 MIT
 
-##近期發現API額度老是不夠用，但是可以申請多個API密鑰，放到nayproxy裏面輪詢使用，這樣就能夠解決API額度不夠用的問題,因此我設立了ntaproxy資料夾,你可能會好奇?
+##近期發現API額度老是不夠用，但是可以申請多個API密鑰，放到nayproxy裏面輪詢使用，這樣就能夠解決API額度不夠用的問題,因此我設立了ntaproxy資料夾.
+你可能會好奇爲何不放到一個文件裏面，這樣會更方便，但是這樣會導致一個問題，就是如果一個API密鑰用完了，我要寫一大段代碼來處理這個問題，這樣會使代碼變得複雜，因此我選擇請專業的nyaproxy來處理這個問題,不用害怕nyaproxy的代碼複雜，因為我會給你config.yml範例，你只需要修改裏面的api_key即可,nyaproxy非常好用,我也推薦一般知識蒸餾使用.
+
+## nyaproxy網站
+https://github.com/Nya-Foundation/NyaProxy 
+感謝大佬!

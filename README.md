@@ -24,6 +24,22 @@
    pip install -r requirements.txt
    ```
 
+### 3. 創建並激活Linux虛擬環境 (推薦)
+
+為了避免依賴衝突，建議為本項目創建一個獨立的Python虛擬環境。
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+或是利用vscode右下角的功能
+當您完成項目使用後，可以通過以下命令退出虛擬環境：
+
+```bash
+deactivate
+```
+
 ## API密鑰設置
 
 本工具需要使用Google Gemini API密鑰。您可以通過以下方式設置API密鑰：
@@ -66,8 +82,20 @@ python start_gui.py
 ```bash
 python gemini_commenter_gui.py
 ```
+### 方法3利用NyaProxy
 
-### 命令行模式
+先修改config.yaml中的api_key
+執行docker部署NyaProxy
+
+```bash
+docker run -d \
+  -p 8964:8080 \
+  -v ${PWD}/config.yaml:/app/config.yaml \
+  -v nya-proxy-logs:/app/logs \
+  k3scat/nya-proxy:latest
+```
+
+然後運行
 
 ```bash
 python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [選項]
@@ -81,21 +109,9 @@ python gemini_commenter.py --folder <源文件夾> --output <輸出文件夾> [�
 - `--delay`, `-d`: API請求之間的延遲時間（秒）（默認：6.0）
 - `--max-backoff`: 最大退避時間（秒）（默認：64.0）
 - `--comment-style`: 註釋風格，line_end（行尾註釋）或line_start（行前註釋）（默認：line_end）
-- `--model`: Gemini模型名稱（默認：gemini-1.5-pro）
+- `--model`: Gemini模型名稱（默認：gemini-2.5-flash）
 - `--api-key`: 直接指定API密鑰（優先級高於環境變量）
 
-### 自動提交到GitHub
-
-```bash
-python auto_push_after_run.py [選項]
-```
-
-選項：
-- `--folder`, `-f`: 源文件夾路徑（默認：當前目錄）
-- `--output`, `-o`: 輸出文件夾路徑（默認：commented）
-- `--filter`: 文件過濾器，如：*.py,*.js,*.html（默認：*.py）
-- `--no-push`: 不推送到GitHub，僅生成註釋
-- `--no-gui`: 不使用GUI，使用命令行模式
 
 ## 項目結構
 
@@ -139,7 +155,7 @@ https://aistudio.google.com/
 
 ## 注意事項
 
-- **API密鑰**：您需要有一個有效的Google Gemini API密鑰，並通過環境變量 `GEMINI_API_KEY` 設置。
+- **API密鑰**：您需要有一個或多個有效的Google Gemini API密鑰，並通過環境變量 `GEMINI_API_KEY` 設置。
 - **文件大小**：處理大型文件可能需要較長時間。
 - **API限制**：Gemini API有使用限制，請適當設置延遲時間以避免觸發限制。
 - **處理時間**：處理時間取決於文件數量、大小和API響應速度。
@@ -151,12 +167,3 @@ MIT
 
 ## NyaProxy 專案連結
 https://github.com/Nya-Foundation/NyaProxy
-
-## NyaProxy docker 部署命令
-
-```bash
-docker run -d \
-  -p 8964:8080 \
-  -v ${PWD}/config.yaml:/app/config.yaml \
-  -v nya-proxy-logs:/app/logs \
-  k3scat/nya-proxy:latest

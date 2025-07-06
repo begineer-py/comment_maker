@@ -205,7 +205,7 @@ model:gemini-2.5-flash
 
 設置 Azure API 版本
 不需要
-gemini cli 的圖形版本?
+疑似 gemini cli 的圖形版本?
 (作者不知道)
 
 ## 更新日誌

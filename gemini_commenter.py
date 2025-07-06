@@ -8,10 +8,15 @@ import random
 import google.generativeai as genai
 
 # 導入提示詞模板
-from prompts import get_prompt_for_style
+
+from config.config import Config
+from config.config import PromptConfig
+from file_hander import send_code
+from file_hander.send_code import SendCode
 
 # 導入API金鑰管理模組
-from api_key_manager import ensure_api_key, test_api_connection
+from api_key_setting.api_key_manager import ensure_api_key
+from api_key_setting.test_api_connect import test_api_connection
 
 # 設置控制台編碼
 try:
@@ -24,8 +29,14 @@ except Exception as e:
     print(f"[WARNING] 設置控制台編碼失敗: {e}")
 
 
-def setup_gemini_api(api_key, model_name="gemini-2.5-flash"):
-    """設置Gemini API並返回模型實例"""
+# 導入訊息打印
+def setup_gemini_api(api_key, model_name=Config.DEFAULT_MODEL_NAME, Nayproxy=False):
+    """設置Gemini API並返回SendCode實例"""
+    if Nayproxy:
+        print("[INFO] Nayproxy 已啟用，跳過API金鑰檢查和連接測試。")
+        # 直接返回配置好的SendCode實例
+        return SendCode(model=model_name, Nayproxy=True)
+
     # 如果API金鑰為空，嘗試重新獲取
     if not api_key:
         print("[WARNING] API金鑰未提供")
@@ -70,13 +81,9 @@ def setup_gemini_api(api_key, model_name="gemini-2.5-flash"):
             print("[INFO] 請稍後再試或檢查您的API金鑰")
             sys.exit(1)
 
-    # 配置Gemini API
-    genai.configure(api_key=api_key)
-
-    # 創建模型實例
+    # 返回配置好的SendCode實例
     print(f"[INFO] 使用 {model_name} 模型...")
-    model = genai.GenerativeModel(model_name)
-    return model
+    return SendCode(api_key=api_key, model=model_name, Nayproxy=False)
 
 
 def parse_args():
@@ -101,13 +108,6 @@ def parse_args():
         "--max-backoff", type=float, default=64.0, help="最大退避時間(秒)"
     )
     parser.add_argument(
-        "--comment-style",
-        type=str,
-        choices=["line_end", "line_start"],
-        default="line_end",
-        help="註釋風格: line_end(行尾註釋)或line_start(行前註釋)",
-    )
-    parser.add_argument(
         "--model",
         type=str,
         default="gemini-2.5-flash",
@@ -116,6 +116,7 @@ def parse_args():
     parser.add_argument(
         "--api-key", type=str, help="Gemini API金鑰，優先級高於環境變數"
     )
+    parser.add_argument("--nayproxy", action="store_true", help="是否使用Nayproxy代理")
 
     return parser.parse_args()
 
@@ -160,117 +161,12 @@ def get_file_extension(file_path):
     return os.path.splitext(file_path)[1].lower()
 
 
-def generate_comments_for_code(
-    model, code, file_path, comment_style="line_end", max_retries=5, max_backoff=64
-):
-    """使用Gemini API為代碼生成逐行註釋
-
-    Args:
-        model: Gemini模型實例
-        code: 代碼內容
-        file_path: 文件路徑
-        comment_style: 註釋風格
-        max_retries: 最大重試次數
-        max_backoff: 最大退避時間
-
-    Returns:
-        str: 添加註釋後的代碼
-    """
-    # 獲取文件名
-    file_name = os.path.basename(file_path)
-    file_ext = get_file_extension(file_path)
-
-    # 獲取對應風格的提示詞，並添加文件名信息
-    prompt = get_prompt_for_style(code, comment_style, file_name)
-
-    try:
-        for attempt in range(max_retries):
-            try:
-                response = model.generate_content(prompt)
-
-                # 檢查響應是否為空
-                if not response or not hasattr(response, "text") or not response.text:
-                    print(f"[WARNING] API返回空響應 (嘗試 {attempt+1}/{max_retries})")
-                    if attempt < max_retries - 1:
-                        wait_time = min((2**attempt) + random.random(), max_backoff)
-                        print(f"[INFO] 等待 {wait_time:.2f} 秒後重試...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print("[ERROR] 多次嘗試後API仍返回空響應，返回原始代碼")
-                        return code
-
-                commented_code = response.text
-
-                # 提取代碼塊 - 使用通用正則表達式
-                code_pattern = r"```.*?\n(.*?)\n```"
-                match = re.search(code_pattern, commented_code, re.DOTALL)
-                if match:
-                    commented_code = match.group(1)
-                else:
-                    # 如果沒有找到代碼塊，嘗試使用整個響應
-                    print("[WARNING] 未找到代碼塊，使用整個響應")
-
-                # 檢查註釋後的代碼是否為空
-                if not commented_code or commented_code.strip() == "":
-                    print("[WARNING] 生成的註釋代碼為空，重試...")
-                    if attempt < max_retries - 1:
-                        wait_time = min((2**attempt) + random.random(), max_backoff)
-                        print(f"[INFO] 等待 {wait_time:.2f} 秒後重試...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print("[ERROR] 多次嘗試後生成的註釋代碼仍為空，返回原始代碼")
-                        return code
-
-                return commented_code
-
-            except Exception as e:
-                error_msg = str(e)
-                print(f"[ERROR] 生成註釋時出錯: {error_msg}")
-
-                # 處理API配額限制錯誤
-                if (
-                    "429" in error_msg
-                    or "quota" in error_msg
-                    or "exhausted" in error_msg
-                    or "rate limit" in error_msg.lower()
-                ):
-                    if attempt < max_retries - 1:
-                        wait_time = min(
-                            (2**attempt) * 10 + random.uniform(0, 5), max_backoff
-                        )
-                        print(
-                            f"[WARNING] 檢測到API配額限制，等待 {wait_time:.2f} 秒後重試..."
-                        )
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print("[ERROR] 多次嘗試後仍然遇到API配額限制，返回原始代碼")
-                        return code
-
-                # 其他錯誤，如果還有重試次數，則等待後重試
-                if attempt < max_retries - 1:
-                    wait_time = min((2**attempt) + random.random(), max_backoff)
-                    print(f"[INFO] 等待 {wait_time:.2f} 秒後重試...")
-                    time.sleep(wait_time)
-                else:
-                    print("[ERROR] 多次嘗試後仍然出錯，返回原始代碼")
-                    return code
-
-        # 如果所有嘗試都失敗，返回原始代碼
-        return code
-    except Exception as e:
-        print(f"[ERROR] 生成註釋時出錯: {e}")
-        return code  # 出錯時返回原始代碼
-
-
 def process_file(
     model,
     file_path,
+    input_folder,
     output_folder,
     delay=6.0,
-    comment_style="line_end",
     max_backoff=64.0,
 ):
     """處理單個代碼文件，添加註釋並保存到輸出文件夾
@@ -278,157 +174,55 @@ def process_file(
     Args:
         model: Gemini模型實例
         file_path: 文件路徑
+        input_folder: 源文件夾路徑
         output_folder: 輸出文件夾
         delay: 請求延遲時間
-        comment_style: 註釋風格
         max_backoff: 最大退避時間
 
     Returns:
         bool: 處理是否成功
     """
     try:
+        # 讀取文件內容
+        with open(file_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        # 如果文件為空，直接跳過
+        if not code.strip():
+            print(f"[INFO] 文件為空，跳過: {file_path}")
+            return True
+
         # 獲取文件擴展名
-        file_ext = get_file_extension(file_path)
-        print(f"[INFO] 處理中: {file_path} (擴展名: {file_ext})")
+        file_extension = get_file_extension(file_path)
 
-        # 讀取文件內容 - 增加錯誤處理和多種編碼嘗試
-        code = None
-        successful_encoding = None
-        encodings_to_try = ["utf-8", "cp950", "big5", "gbk", "latin-1"]
+        # 獲取文件名
+        file_name = os.path.basename(file_path)
 
-        # 對於HTML文件，優先嘗試UTF-8
-        if file_ext.lower() in [".html", ".htm"]:
-            print(f"[INFO] 檢測到HTML文件，優先嘗試UTF-8編碼")
-            encodings_to_try = ["utf-8"] + encodings_to_try
-
-        for encoding in encodings_to_try:
-            try:
-                with open(file_path, "r", encoding=encoding) as f:
-                    code = f.read()
-                print(f"[INFO] 成功使用 {encoding} 編碼讀取文件")
-                successful_encoding = encoding
-                break
-            except UnicodeDecodeError:
-                print(f"[WARNING] 無法使用 {encoding} 編碼讀取文件，嘗試其他編碼...")
-            except Exception as e:
-                print(f"[ERROR] 讀取文件時出錯 ({encoding}): {e}")
-
-        # 如果所有編碼都失敗，嘗試二進制讀取
-        if code is None:
-            try:
-                print(f"[WARNING] 所有文本編碼嘗試失敗，嘗試二進制讀取...")
-                with open(file_path, "rb") as f:
-                    binary_data = f.read()
-                # 嘗試檢測BOM並解碼
-                if binary_data.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM
-                    code = binary_data[3:].decode("utf-8")
-                    print(f"[INFO] 檢測到UTF-8 BOM，成功解碼")
-                    successful_encoding = "utf-8-sig"  # 使用-sig表示帶BOM的UTF-8
-                else:
-                    # 最後嘗試使用latin-1（可以解碼任何字節）
-                    code = binary_data.decode("latin-1")
-                    print(f"[INFO] 使用latin-1編碼成功讀取文件")
-                    successful_encoding = "latin-1"
-            except Exception as e:
-                print(f"[ERROR] 二進制讀取文件失敗: {e}")
-                return False
-
-        # 如果仍然無法讀取文件，則退出
-        if code is None:
-            print(f"[ERROR] 無法讀取文件 {file_path}，跳過處理")
-            return False
-
+        # 'model' 參數本身就是配置好的 SendCode 實例，直接使用即可
         # 生成註釋
-        commented_code = generate_comments_for_code(
-            model,
+        commented_code = model.generate_comments_for_code(
             code,
             file_path,
-            comment_style,
-            max_retries=5,
-            max_backoff=max_backoff,
         )
 
-        # 確保commented_code不是None
-        if commented_code is None:
-            print(f"[ERROR] 生成的註釋代碼為None，跳過保存: {file_path}")
+        # 如果返回的代碼為空或與原始代碼相同，則視為處理失敗
+        if not commented_code or commented_code == code:
+            print(f"[WARNING] 未能為文件生成註釋: {file_path}")
             return False
 
-        # 創建輸出文件夾
-        os.makedirs(output_folder, exist_ok=True)
+        # 計算相對路徑並構建目標路徑
+        relative_path = os.path.relpath(file_path, input_folder)
+        output_path = os.path.join(output_folder, relative_path)
 
-        # 確定輸出文件路徑
-        rel_path = os.path.relpath(file_path, os.path.dirname(output_folder))
-        output_path = os.path.join(output_folder, rel_path)
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        # 確保輸出目標文件夾存在
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
 
-        # 保存註釋後的代碼 - 使用與讀取相同的編碼
-        try:
-            # 如果沒有成功的編碼，默認使用utf-8
-            if not successful_encoding:
-                successful_encoding = "utf-8"
+        # 保存到輸出文件夾
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(commented_code)
 
-            # 對於HTML文件，強制使用UTF-8編碼保存
-            if file_ext.lower() in [".html", ".htm"]:
-                print(f"[INFO] HTML文件將使用UTF-8編碼保存")
-                successful_encoding = "utf-8"
-
-            # 檢查註釋後的代碼是否可以使用檢測到的編碼進行編碼
-            try:
-                commented_code.encode(successful_encoding)
-            except UnicodeEncodeError:
-                print(
-                    f"[WARNING] 註釋後的代碼無法使用 {successful_encoding} 編碼，將改用UTF-8"
-                )
-                successful_encoding = "utf-8"
-
-            print(f"[INFO] 使用 {successful_encoding} 編碼保存文件")
-
-            # 對於HTML文件，添加適當的編碼聲明
-            if (
-                file_ext.lower() in [".html", ".htm"]
-                and "<meta charset=" not in commented_code.lower()
-            ):
-                # 檢查是否有head標籤
-                if "<head>" in commented_code:
-                    commented_code = commented_code.replace(
-                        "<head>", '<head>\n    <meta charset="UTF-8">'
-                    )
-                    print(f"[INFO] 已添加UTF-8編碼聲明到HTML文件")
-
-            # 使用檢測到的編碼保存文件
-            with open(output_path, "w", encoding=successful_encoding) as f:
-                f.write(commented_code)
-            print(f"[INFO] 完成: {file_path} -> {output_path}")
-        except TypeError as te:
-            print(f"[ERROR] 寫入文件時類型錯誤: {te}")
-            print(f"[INFO] 嘗試將None轉換為空字符串並保存原始代碼")
-            with open(output_path, "w", encoding=successful_encoding) as f:
-                f.write(code)  # 保存原始代碼
-            print(f"[INFO] 已保存原始代碼: {output_path}")
-            return False
-        except Exception as e:
-            print(f"[ERROR] 保存文件時出錯: {e}")
-            print(f"[INFO] 嘗試使用二進制模式保存文件")
-            try:
-                # 對於HTML文件，確保使用UTF-8編碼
-                if file_ext.lower() in [".html", ".htm"]:
-                    encoding_to_use = "utf-8"
-                else:
-                    encoding_to_use = successful_encoding
-
-                with open(output_path, "wb") as f:
-                    f.write(commented_code.encode(encoding_to_use, errors="replace"))
-                print(f"[INFO] 使用二進制模式成功保存文件 (編碼: {encoding_to_use})")
-            except Exception as e2:
-                print(f"[ERROR] 二進制保存也失敗: {e2}")
-                # 最後嘗試保存原始代碼
-                try:
-                    with open(output_path, "wb") as f:
-                        f.write(code.encode(successful_encoding, errors="replace"))
-                    print(f"[INFO] 已保存原始代碼")
-                except Exception as e3:
-                    print(f"[ERROR] 保存原始代碼也失敗: {e3}")
-                    return False
+        print(f"[INFO] 完成: {file_path} -> {output_path}")
 
         # 添加隨機延遲，避免API請求過於規律
         actual_delay = delay + random.uniform(0, 2)
@@ -448,11 +242,10 @@ def process_folder(
     folder,
     output_folder,
     recursive=False,
-    file_filter="*.py",
+    file_filter=Config.DEFAULT_FILE_FILTER,
     model=None,
-    delay=6.0,
-    max_backoff=64.0,
-    comment_style="line_end",
+    delay=Config.DEFAULT_REQUEST_DELAY,
+    max_backoff=Config.DEFAULT_MAX_BACKOFF,
 ):
     """處理文件夾中的所有代碼文件
 
@@ -464,7 +257,6 @@ def process_folder(
         model: Gemini模型實例
         delay: 請求延遲時間
         max_backoff: 最大退避時間
-        comment_style: 註釋風格
 
     Returns:
         tuple: (成功處理的文件數, 總文件數)
@@ -478,9 +270,7 @@ def process_folder(
 
     print(f"[INFO] 找到 {len(code_files)} 個文件")
     print(f"[INFO] 速率限制: 使用 {delay} 秒基礎延遲和指數退避算法")
-    print(
-        f"[INFO] 註釋風格: {'行尾註釋' if comment_style == 'line_end' else '行前註釋'}"
-    )
+    print(f"[INFO] 註釋風格: 行後註釋")
 
     # 處理每個文件
     success_count = 0
@@ -508,9 +298,7 @@ def process_folder(
             f"[INFO] 處理文件 {current_file_num}/{total_files}: {file_path} (擴展名: {file_ext})"
         )
 
-        if process_file(
-            model, file_path, output_folder, delay, comment_style, max_backoff
-        ):
+        if process_file(model, file_path, folder, output_folder, delay, max_backoff):
             success_count += 1
             print(f"[INFO] 進度: {success_count}/{total_count} 個文件成功處理")
 
@@ -545,7 +333,7 @@ def main():
     print(f"[INFO] 使用API金鑰: {masked_key} (長度: {len(api_key)})")
 
     # 設置Gemini API
-    model = setup_gemini_api(api_key, args.model)
+    model = setup_gemini_api(api_key, args.model, args.nayproxy)
 
     # 處理文件夾
     process_folder(
@@ -556,7 +344,6 @@ def main():
         model,
         args.delay,
         args.max_backoff,
-        args.comment_style,
     )
 
 

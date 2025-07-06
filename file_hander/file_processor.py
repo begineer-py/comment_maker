@@ -12,6 +12,7 @@ import subprocess
 import threading
 import queue
 import time
+from config.config import Config
 
 
 class FileProcessor:
@@ -35,11 +36,11 @@ class FileProcessor:
         output,
         recursive,
         api_key,
-        file_filter="*.py",
-        delay=6.0,
-        max_backoff=64.0,
-        comment_style="line_end",
-        model_name="gemini-2.5-flash",
+        file_filter=Config.DEFAULT_FILE_FILTER,
+        delay=Config.DEFAULT_REQUEST_DELAY,
+        max_backoff=Config.DEFAULT_MAX_BACKOFF,
+        model_name=Config.DEFAULT_MODEL_NAME,
+        use_nayproxy=False,
     ):
         """開始處理文件
 
@@ -51,7 +52,6 @@ class FileProcessor:
             file_filter: 文件過濾器
             delay: 請求延遲時間
             max_backoff: 最大退避時間
-            comment_style: 註釋風格
             model_name: 模型名稱
         """
         if self.is_processing:
@@ -71,8 +71,8 @@ class FileProcessor:
                     file_filter,
                     delay,
                     max_backoff,
-                    comment_style,
                     model_name,
+                    use_nayproxy,
                 ),
                 daemon=True,
             ).start()
@@ -91,11 +91,11 @@ class FileProcessor:
         output,
         recursive,
         api_key,
-        file_filter="*.py",
-        delay=6.0,
-        max_backoff=64.0,
-        comment_style="line_end",
-        model_name="gemini-1.5-pro",
+        file_filter=Config.DEFAULT_FILE_FILTER,
+        delay=Config.DEFAULT_REQUEST_DELAY,
+        max_backoff=Config.DEFAULT_MAX_BACKOFF,
+        model_name=Config.DEFAULT_MODEL_NAME,
+        use_nayproxy=False,
     ):
         """處理選定的文件夾中的文件（在單獨的線程中運行）
 
@@ -107,7 +107,6 @@ class FileProcessor:
             file_filter: 文件過濾器
             delay: 請求延遲時間
             max_backoff: 最大退避時間
-            comment_style: 註釋風格
             model_name: 模型名稱
         """
         print(
@@ -128,7 +127,7 @@ class FileProcessor:
                 max_backoff = 60.0
 
             print(
-                f"[INFO] 使用延遲={delay}秒, 最大退避時間={max_backoff}秒, 註釋風格={comment_style}, 模型={model_name}"
+                f"[INFO] 使用延遲={delay}秒, 最大退避時間={max_backoff}秒, 模型={model_name}"
             )
 
             # 打印API密鑰信息（部分隱藏）
@@ -145,6 +144,8 @@ class FileProcessor:
                 folder,
                 "--output",
                 output,
+                "--filter",
+                file_filter,
                 "--delay",
                 str(delay),
                 "--max-backoff",
@@ -152,20 +153,15 @@ class FileProcessor:
                 "--model",
                 model_name,
                 "--api-key",
-                api_key,  # 直接傳遞API密鑰，避免環境變量問題
+                api_key,
             ]
-
-            # 添加遞歸參數
+            if use_nayproxy:
+                command.append("--nayproxy")
             if recursive:
                 command.append("--recursive")
 
-            # 添加文件過濾參數
             if file_filter and file_filter != "*.py":
                 command.extend(["--filter", file_filter])
-
-            # 添加註釋風格參數
-            command.extend(["--comment-style", comment_style])
-
             # 打印命令（隱藏API密鑰）
             safe_command = command.copy()
             api_key_index = safe_command.index("--api-key") + 1

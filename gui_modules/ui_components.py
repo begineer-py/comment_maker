@@ -265,24 +265,10 @@ class SettingsPanel:
             side=tk.RIGHT, padx=5
         )
 
-        # 註釋風格設置
-        ttk.Label(self.grid, text="註釋風格:").grid(
-            row=4, column=0, sticky=tk.W, padx=5, pady=5
-        )
-
-        self.style_frame = ttk.Frame(self.grid)
-        self.style_frame.grid(row=4, column=1, sticky=tk.EW, padx=5, pady=5)
-
-        self.style_var = tk.StringVar(value="line_end")
-        ttk.Radiobutton(
-            self.style_frame, text="行尾註釋", variable=self.style_var, value="line_end"
-        ).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(
-            self.style_frame,
-            text="行前註釋",
-            variable=self.style_var,
-            value="line_start",
-        ).pack(side=tk.LEFT, padx=5)
+        # Nayproxy 選項
+        self.nayproxy_var = tk.BooleanVar(value=False) # 默認為不使用
+        nayproxy_check = ttk.Checkbutton(self.grid, text="使用 Nayproxy", variable=self.nayproxy_var)
+        nayproxy_check.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
 
         # 模型設置
         ttk.Label(self.grid, text="模型:").grid(
@@ -334,9 +320,9 @@ class SettingsPanel:
             "output": self.output_entry.get(),
             "recursive": self.recursive_var.get(),
             "file_filter": self.filter_entry.get(),
-            "comment_style": self.style_var.get(),
             "model_name": self.model_var.get(),
             "delay": self.delay_var.get(),
+            "nayproxy": self.nayproxy_var.get(),
         }
 
 
@@ -357,7 +343,7 @@ class HelpDialog:
         # 創建對話框
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("幫助")
-        self.dialog.geometry("600x500")
+        self.dialog.geometry("800x600")
         self.dialog.transient(self.parent)
         self.dialog.grab_set()
 
@@ -471,7 +457,7 @@ class AboutDialog:
         # 創建對話框
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("關於")
-        self.dialog.geometry("400x300")
+        self.dialog.geometry("800x600")
         self.dialog.resizable(False, False)
         self.dialog.transient(self.parent)
         self.dialog.grab_set()

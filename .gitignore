@@ -34,9 +34,9 @@ test_output/
 test_folder/
 
 # 测试脚本
-test_*.py
 html_encoding_fix.md
-
+/test
+/output
 # IDE相关
 .idea/
 .vscode/

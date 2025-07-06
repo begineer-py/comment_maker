@@ -214,3 +214,8 @@ model:gemini-2.5-flash
 此外，先前的 Pro 模型目前似乎不再提供免費方案，已改為支援 Flash 模型。
 先前遞迴處理子資料夾的功能設計有誤，現已修正。
 此版本已通過完整測試，可安心使用。
+
+## FB
+
+https://www.facebook.com/groups/1436655630915182
+comment_maker

@@ -184,6 +184,30 @@ MIT
 
 https://github.com/Nya-Foundation/NyaProxy
 
+## NyaProxy 與 cline 的配合使用
+
+配置只要像是這樣:
+
+API 供应商
+OpenAI 兼容接口
+
+Base URL
+http://localhost:8500/api/gemini
+
+API Key
+(留空 除非你有設定 NyaProxy 的 主 API 金鑰)
+
+Model ID
+gemini-2.5-flash
+
+自定义头
+model:gemini-2.5-flash
+
+設置 Azure API 版本
+不需要
+gemini cli 的圖形版本?
+(作者不知道)
+
 ## 更新日誌
 
 由於行前註釋容易導致縮排問題，本專案已移除行前註釋功能，請使用行尾註釋功能。

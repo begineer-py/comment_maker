@@ -1,0 +1,94 @@
+server:
+  api_key: # API金鑰設置
+  logging: # 日誌設置
+    enabled: true # 是否啟用日誌
+    level: debug # 日誌級別
+    log_file: app.log # 日誌文件路徑
+  proxy: # 代理設置
+    enabled: false # 是否啟用代理
+    address: socks5://username:password@proxy.example.com:1080 # 代理地址
+  dashboard: # 儀表板設置
+    enabled: true # 是否啟用儀表板
+  cors: # CORS跨域設置
+    # 允許所有來源使用"*"，但當allow_credentials為true時應指定確切來源以確保安全
+    allow_origins: ["*"] # 允許的來源
+    allow_credentials: true # 是否允許憑證
+    allow_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"] # 允許的HTTP方法
+    allow_headers: ["*"] # 允許的HTTP頭
+
+# 所有API端點的默認配置，可被單個API配置覆蓋
+default_settings:
+  key_variable: keys # 金鑰變量名稱
+  key_concurrency: true # 設置為true表示每個金鑰可處理多個併發請求，否則金鑰會被鎖定直到請求完成
+  randomness: 0.0 # 隨機延遲(0.0-x)秒，用於引入請求時間變異性避免因速率限制導致的可檢測模式
+  load_balancing_strategy: round_robin # 負載均衡策略
+  # 路徑和方法過濾
+  allowed_paths:
+    enabled: false # 設置為true啟用請求路徑過濾
+    mode: whitelist # "whitelist"表示只允許列出的路徑，"blacklist"表示阻止列出的路徑
+    paths:
+      - "*"
+  allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"] # API允許的HTTP方法
+  queue: # 隊列設置
+    max_size: 200 # 最大隊列大小
+    expiry_seconds: 300 # 隊列過期時間(秒)
+  rate_limit: # 速率限制設置
+    enabled: true # 是否啟用速率限制
+    endpoint_rate_limit: 10/s # 默認端點速率限制 - 可被單個API配置覆蓋
+    key_rate_limit: 10/m # 默認金鑰速率限制 - 可被單個API配置覆蓋
+    ip_rate_limit: 1000/d # 基於IP的速率限制，防止濫用和金鑰重新分發
+    user_rate_limit: 1000/d # 每個代理API金鑰的用戶速率限制
+    rate_limit_paths:
+      - "*"
+  retry: # 重試設置
+    enabled: true # 是否啟用重試
+    mode: key_rotation # 重試模式
+    attempts: 3 # 重試次數
+    retry_after_seconds: 1 # 重試間隔時間(秒)
+    retry_request_methods: [POST, GET, PUT, DELETE, PATCH, OPTIONS] # 可重試的HTTP方法
+    retry_status_codes: [429, 500, 502, 503, 504] # 觸發重試的狀態碼
+  timeouts: # 超時設置
+    request_timeout_seconds: 300 # 請求超時時間(秒)
+
+apis: # API配置
+  gemini: # Google Gemini API配置
+    name: Google Gemini API # API名稱
+    endpoint: https://generativelanguage.googleapis.com/v1beta/openai # API端點
+    aliases:
+      - /gemini # API別名
+    key_variable: keys # 金鑰變量名稱
+    headers:
+      Authorization: "Bearer ${{keys}}" # 授權頭
+    variables:
+      keys: # 金鑰列表
+        - your_api_key
+    load_balancing_strategy: least_requests # 負載均衡策略
+    rate_limit: # 速率限制設置
+      enabled: true # 是否啟用速率限制
+      # 對於Gemini-2.5-pro-exp-03-25，每個金鑰的速率限制是5 RPM和25 RPD
+      # 端點速率限制應為n × 單金鑰RPD，其中n是金鑰數量
+      endpoint_rate_limit: 75/d # 端點速率限制
+      key_rate_limit: 5/m # 金鑰速率限制
+      # 應用速率限制的路徑(支持正則表達式) - 默認為所有路徑"*"
+      rate_limit_paths:
+        - "/chat/*"
+        - "/images/*"
+
+    # 請求體替換設置
+    request_body_substitution:
+      enabled: false # 是否啟用請求體替換
+      # 使用JMEPath的請求體替換規則
+      rules:
+        # 由於Gemini API不支持frequency_penalty和presence_penalty，我們用這些規則移除它們
+        - name: "移除frequency_penalty"
+          operation: remove
+          path: "frequency_penalty"
+          conditions:
+            - field: "frequency_penalty"
+              operator: "exists"
+        - name: "移除presence_penalty"
+          operation: remove
+          path: "presence_penalty"
+          conditions:
+            - field: "presence_penalty"
+              operator: "exists"

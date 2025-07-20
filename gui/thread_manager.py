@@ -30,34 +30,26 @@ class ProcessingThreadManager:
         self.is_processing = False
         self.process = None
 
-    def start_processing(
-        self,
-        folder,
-        output,
-        recursive,
-        api_key,
-        file_filter=Config.DEFAULT_FILE_FILTER,
-        delay=Config.DEFAULT_REQUEST_DELAY,
-        max_backoff=Config.DEFAULT_MAX_BACKOFF,
-        model_name=Config.DEFAULT_MODEL_NAME,
-        use_nyaproxy=False,
-    ):
+    def start_processing(self, settings):  # 將所有參數替換為一個 settings 字典
         """開始處理文件
-
         Args:
-            folder: 源文件夾路徑
-            output: 輸出文件夾路徑
-            recursive: 是否遞歸處理子文件夾
-            api_key: API密鑰
-            file_filter: 文件過濾器
-            delay: 請求延遲時間
-            max_backoff: 最大退避時間
-            model_name: 模型名稱
+            settings (dict): 包含所有配置的字典
         """
         if self.is_processing:
             return
 
         self.is_processing = True
+
+        # 從 settings 字典中提取參數
+        folder = settings.get("folder")
+        output = settings.get("output")
+        recursive = settings.get("recursive")
+        api_key = settings.get("api_key")
+        file_filter = settings.get("file_filter", Config.DEFAULT_FILE_FILTER)
+        delay = settings.get("delay", Config.DEFAULT_REQUEST_DELAY)
+        max_backoff = settings.get("max_backoff", Config.DEFAULT_MAX_BACKOFF)
+        model_name = settings.get("model_name", Config.DEFAULT_MODEL_NAME)
+        use_nyaproxy = settings.get("nyaproxy", False)  # 注意這裡的鍵名
 
         # 在單獨的線程中處理文件
         try:
@@ -131,10 +123,14 @@ class ProcessingThreadManager:
             )
 
             # 打印API密鑰信息（部分隱藏）
-            masked_key = (
-                f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
-            )
-            print(f"[INFO] 使用API密鑰: {masked_key} (長度: {len(api_key)})")
+            print(f"[DEBUG] api_key 的值: {api_key}, 類型: {type(api_key)}")  # 新增日誌
+            if api_key is not None:  # 避免 NoneType 錯誤
+                masked_key = (
+                    f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
+                )
+                print(f"[INFO] 使用API密鑰: {masked_key} (長度: {len(api_key)})")
+            else:
+                print("[WARNING] API密鑰為 None，無法打印其長度。")
 
             # 構建命令
             command = [
@@ -175,11 +171,11 @@ class ProcessingThreadManager:
                 "output": output,
                 "recursive": recursive,
                 "api_key": api_key,
-                "file_filter": file_filter,
+                "filter": file_filter,  # 將 file_filter 鍵改為 filter
                 "delay": delay,
                 "max_backoff": max_backoff,
                 "use_nyaproxy": use_nyaproxy,
-                "model_name": model_name
+                "model_name": model_name,
             }
 
             # 創建並運行協調器
@@ -198,11 +194,3 @@ class ProcessingThreadManager:
     def stop_processing(self):
         """Requests to stop the processing thread."""
         # This is a simplified stop mechanism. A truly graceful stop would require
-        # the engine to periodically check a threading.Event.
-        if self.thread and self.thread.is_alive():
-            self.queue.put(
-                (
-                    "log",
-                    "[INFO] Stop request sent. The current file will finish processing.",
-                )
-            )

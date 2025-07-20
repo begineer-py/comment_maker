@@ -168,6 +168,8 @@ python gemini_commenter.py --folder /home/hacker/Desktop/comment_maker/test --ou
 │   └── thread_manager.py
 └── utils/
 └── init.py
+```
+
 ## 模組化結構說明
 
 GUI 工具採用模組化結構，將功能劃分為多個模組：
@@ -234,4 +236,7 @@ model:gemini-2.5-flash
 
 https://www.facebook.com/groups/1436655630915182
 comment_maker
+
+```
+
 ```

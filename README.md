@@ -131,44 +131,43 @@ python gemini_commenter.py --folder /home/hacker/Desktop/comment_maker/test --ou
 ## 專案結構
 
 ```
-.
-/comment_maker
-├── .gitignore
+── .gitignore
+├── 流程圖.png
+├── config.yaml
 ├── LICENSE.txt
 ├── README.md
 ├── requirements.txt
-├── config.yaml
-├── run_cli.py                  # 【新】CLI 模式的統一入口
-├── run_gui.py                  # 【新】GUI 模式的統一入口
-│
-├── core/                       # 【新】核心業務邏輯
-│   ├── __init__.py
-│   ├── file_hander/            # 【新】檔案處理相關模組
-│   |── __init__.py
-│         ├── file_processor.py       # 處理檔案的複製、讀寫、遍歷
-│   ├── comment_generator.py    # 負責與 Gemini API 互動、生成註釋
-│
-├── config/                     # 【新】所有設定相關的模組
-│   ├── __init__.py
-│   ├── api_keys.py             # 管理 API 金鑰的讀取與輪換
-│   ├── prompts.py              # 存放與管理所有的 Prompt 模板
-│   └── settings.py             # 讀取與解析 config.yaml
-│
-├── cli/                        # 【新】命令列介面專用程式碼
-│   ├── __init__.py
-│   ├── args.py                 # 解析與管理命令列參數
-│   └── main.py                 # CLI 的主執行邏輯
-│
-├── gui/                        # 【新】圖形化介面專用程式碼
-│   ├── __init__.py
-│   ├── components.py           # Tkinter 的 UI 元件
-│   ├── main.py                 # GUI 的主視窗與事件綁定
-│   └── worker.py               # 處理背景任務的執行緒
-│
-└── utils/                      # 【新】輔助工具與腳本
-    ├── __init__.py
-    └── git_handler.py          # (可選) 自動 Git 推送的腳本
-
+├── run_cli.py
+├── run_gui.py
+├── cli/
+│   ├── init.py
+│   ├── args.py
+│   └── main.py
+├── config/
+│   ├── init.py
+│   ├── config.py
+│   ├── exclude_file.py
+│   ├── exclude.yaml
+│   ├── log_config.py
+│   ├── show_config.py
+│   └── API_config/
+│       ├── api_manager.py
+│       └── test_api_connection.py
+├── core/
+│   ├── init.py
+│   ├── file_processor.py
+│   ├── file_scanner.py
+│   ├── gemini_client.py
+│   └── orchestrator.py
+├── exceptions/
+│   └── exceptions.py
+├── gui/
+│   ├── init.py
+│   ├── components.py
+│   ├── main_window.py
+│   └── thread_manager.py
+└── utils/
+└── init.py
 ## 模組化結構說明
 
 GUI 工具採用模組化結構，將功能劃分為多個模組：

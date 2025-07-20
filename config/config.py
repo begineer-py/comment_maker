@@ -8,8 +8,8 @@ class Config:
     DEFAULT_MAX_BACKOFF = 64.0
     DEFAULT_MODEL_NAME = "gemini-2.5-flash"
     DEFAULT_MAX_RETRIES = 3
-    DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY")
-    Nayproxy_port = 8500
+    DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY")  # 從環境變數中讀取API金鑰
+    nyaproxy_port = 8500
 
 
 class PromptConfig:

@@ -10,14 +10,14 @@ import json
 
 
 class SendCode:
-    def __init__(self, api_key=None, model=None, Nayproxy=False):
+    def __init__(self, api_key=None, model=None, nyaproxy=False):
         self.model_name = model or Config.DEFAULT_MODEL_NAME
         self.max_retries = Config.DEFAULT_MAX_RETRIES
         self.max_backoff = Config.DEFAULT_MAX_BACKOFF
         self.api_key = api_key or Config.DEFAULT_API_KEY
-        self.Nayproxy = Nayproxy
+        self.nyaproxy = nyaproxy
 
-        if not self.Nayproxy:
+        if not self.nyaproxy:
             genai.configure(api_key=self.api_key)
             self.gemini_model = genai.GenerativeModel(self.model_name)
 
@@ -25,7 +25,7 @@ class SendCode:
     def _extract_commented_code_from_response(self, response_content):
         # 首先移除最外層的 ```json 和 ```
         if response_content.startswith("```json") and response_content.endswith("```"):
-            json_string = response_content[len("```json\n"): -3].strip()
+            json_string = response_content[len("```json\n") : -3].strip()
         else:
             # 如果不是預期的格式，則直接使用原始內容（可能需要進一步處理或報錯）
             print("[WARNING] 模型返回的內容不是預期的 ```json 格式")
@@ -64,7 +64,7 @@ class SendCode:
         # 獲取提示詞，並添加文件名信息
         prompt = PromptConfig.get_prompt(code, file_name)
 
-        if not self.Nayproxy:
+        if not self.nyaproxy:
             try:
                 for attempt in range(self.max_retries):
                     try:
@@ -90,7 +90,9 @@ class SendCode:
                                 print("[ERROR] 多次嘗試後API仍返回空響應，返回原始代碼")
                                 return code
 
-                        commented_code = self._extract_commented_code_from_response(response.text)
+                        commented_code = self._extract_commented_code_from_response(
+                            response.text
+                        )
 
                         # 檢查註釋後的代碼是否為空
                         if not commented_code or commented_code.strip() == "":
@@ -154,11 +156,11 @@ class SendCode:
                 print(f"[ERROR] 生成註釋時出錯: {e}")
                 return code  # 出錯時返回原始代碼
         else:
-            # 使用Nayproxy 代理
+            # 使用nyaproxy 代理
             try:
-                print(f"[INFO] 使用Nayproxy 代理")
+                print(f"[INFO] 使用nyaproxy 代理")
                 response = requests.post(
-                    f"http://localhost:{Config.Nayproxy_port}/api/gemini/chat/completions",
+                    f"http://localhost:{Config.nyaproxy_port}/api/gemini/chat/completions",
                     headers={
                         "Content-Type": "application/json",
                     },
@@ -166,28 +168,30 @@ class SendCode:
                         "model": self.model_name,
                         "messages": [{"role": "user", "content": prompt}],
                     },
-                    timeout=30,
+                    timeout=120,
                 )
                 response.raise_for_status()
 
                 json_response = response.json()
                 print(
-                    f"[DEBUG] 從 Nayproxy 接收到的原始響應: {json_response}"
+                    f"[DEBUG] 從 nyaproxy 接收到的原始響應: {json_response}"
                 )  # 新增的打印語句
 
                 if "choices" in json_response and len(json_response["choices"]) > 0:
                     raw_content = json_response["choices"][0]["message"]["content"]
-                    commented_code = self._extract_commented_code_from_response(raw_content)
+                    commented_code = self._extract_commented_code_from_response(
+                        raw_content
+                    )
                     return commented_code
                 else:
                     print(
-                        "[ERROR] Nayproxy 返回的響應中沒有 'choices' 或 'message' 字段"
+                        "[ERROR] nyaproxy 返回的響應中沒有 'choices' 或 'message' 字段"
                     )
                     return code
 
             except requests.exceptions.RequestException as e:
-                print(f"[ERROR] 通過 Nayproxy 發送請求時出錯: {e}")
+                print(f"[ERROR] 通過 nyaproxy 發送請求時出錯: {e}")
                 return code
             except json.JSONDecodeError as e:
-                print(f"[ERROR] 解碼 Nayproxy 響應時出錯: {e}")
+                print(f"[ERROR] 解碼 nyaproxy 響應時出錯: {e}")
                 return code

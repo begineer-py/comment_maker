@@ -265,10 +265,12 @@ class SettingsPanel:
             side=tk.RIGHT, padx=5
         )
 
-        # Nayproxy 選項
-        self.nayproxy_var = tk.BooleanVar(value=False) # 默認為不使用
-        nayproxy_check = ttk.Checkbutton(self.grid, text="使用 Nayproxy", variable=self.nayproxy_var)
-        nayproxy_check.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
+        # nyaproxy 選項
+        self.nyaproxy_var = tk.BooleanVar(value=False)  # 默認為不使用
+        nyaproxy_check = ttk.Checkbutton(
+            self.grid, text="使用 nyaproxy", variable=self.nyaproxy_var
+        )
+        nyaproxy_check.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
 
         # 模型設置
         ttk.Label(self.grid, text="模型:").grid(
@@ -322,7 +324,7 @@ class SettingsPanel:
             "file_filter": self.filter_entry.get(),
             "model_name": self.model_var.get(),
             "delay": self.delay_var.get(),
-            "nayproxy": self.nayproxy_var.get(),
+            "nyaproxy": self.nyaproxy_var.get(),
         }
 
 

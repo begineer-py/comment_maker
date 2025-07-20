@@ -132,26 +132,42 @@ python gemini_commenter.py --folder /home/hacker/Desktop/comment_maker/test --ou
 
 ```
 .
-├── .gitignore                  # Git 忽略檔案
-├── api_key_setting/            # API 金鑰設定相關模組目錄
-│   ├── api_key_manager.py      # API 金鑰管理模組
-│   └── api_settings.py         # API 設定模組
-├── auto_push_after_run.py      # 自動提交至 GitHub 的腳本
-├── config.yaml                 # 設定檔
-├── file_hander/                # 檔案處理相關模組目錄
-│   └── file_processor.py       # 檔案處理模組
-├── gemini_commenter.py         # 命令列工具
-├── gemini_commenter_gui.py     # 模組化圖形化使用者介面工具
-├── gui_modules/                # GUI 模組目錄
-│   ├── __init__.py             # 模組初始化檔案
-│   └── ui_components.py        # UI 元件模組
-├── LICENSE.txt                 # 許可證檔案
-├── prompts.py                  # 提示詞模板
-├── README.md                   # 說明文件
-├── requirements.txt            # 依賴套件列表
-├── start_gui.py                # GUI 啟動腳本
-└── nyaproxy/                   # NyaProxy 相關檔案目錄
-```
+/comment_maker
+├── .gitignore
+├── LICENSE.txt
+├── README.md
+├── requirements.txt
+├── config.yaml
+├── run_cli.py                  # 【新】CLI 模式的統一入口
+├── run_gui.py                  # 【新】GUI 模式的統一入口
+│
+├── core/                       # 【新】核心業務邏輯
+│   ├── __init__.py
+│   ├── file_hander/            # 【新】檔案處理相關模組
+│   |── __init__.py
+│         ├── file_processor.py       # 處理檔案的複製、讀寫、遍歷
+│   ├── comment_generator.py    # 負責與 Gemini API 互動、生成註釋
+│
+├── config/                     # 【新】所有設定相關的模組
+│   ├── __init__.py
+│   ├── api_keys.py             # 管理 API 金鑰的讀取與輪換
+│   ├── prompts.py              # 存放與管理所有的 Prompt 模板
+│   └── settings.py             # 讀取與解析 config.yaml
+│
+├── cli/                        # 【新】命令列介面專用程式碼
+│   ├── __init__.py
+│   ├── args.py                 # 解析與管理命令列參數
+│   └── main.py                 # CLI 的主執行邏輯
+│
+├── gui/                        # 【新】圖形化介面專用程式碼
+│   ├── __init__.py
+│   ├── components.py           # Tkinter 的 UI 元件
+│   ├── main.py                 # GUI 的主視窗與事件綁定
+│   └── worker.py               # 處理背景任務的執行緒
+│
+└── utils/                      # 【新】輔助工具與腳本
+    ├── __init__.py
+    └── git_handler.py          # (可選) 自動 Git 推送的腳本
 
 ## 模組化結構說明
 
@@ -219,3 +235,4 @@ model:gemini-2.5-flash
 
 https://www.facebook.com/groups/1436655630915182
 comment_maker
+```

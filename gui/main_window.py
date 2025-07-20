@@ -18,14 +18,19 @@ import platform
 import time
 
 # 導入API金鑰管理模組
-from api_key_setting.api_key_manager import get_api_key, save_api_key
-from api_key_setting.test_api_connect import test_api_connection
-from gui_modules.ui_components import SettingsPanel, LogPanel, StatusBar
-from file_hander.file_processor import FileProcessor
-from config.print_info import print_system_info
+from config.API_config.api_manager import get_api_key, save_api_key
+from config.API_config.test_api_connection import TestApiConnection
+from gui.components import (
+    SettingsPanel,
+    LogPanel,
+    StatusBar,
+    HelpDialog,
+    AboutDialog,
+)
+from core.thread_manager import ProcessingThreadManager
+
 from config.config import Config
-from api_key_setting.api_settings import ApiSettingsDialog
-from gui_modules.ui_components import HelpDialog, AboutDialog
+from config.show_config import show_system_info
 
 
 class GeminiCommenterGUI:
@@ -49,7 +54,7 @@ class GeminiCommenterGUI:
         ttk.Style().theme_use(self.current_theme)
 
         # 打印系統信息
-        print_system_info(self)
+        show_system_info(self)
 
         # 創建消息隊列
         self.queue = queue.Queue()
@@ -69,7 +74,9 @@ class GeminiCommenterGUI:
         self._create_menu()
 
         # 創建文件處理器
-        self.file_processor = FileProcessor(self.queue, self._on_processing_complete)
+        self.file_processor = ProcessingThreadManager(
+            self.queue, on_complete_callback=self._on_processing_complete
+        )
 
         # 開始處理消息隊列
         self._start_queue_processing()
@@ -78,7 +85,7 @@ class GeminiCommenterGUI:
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
         # 打印初始化完成信息
-        print_system_info(self)
+        show_system_info(self)
 
     def _get_api_key(self):
         """獲取API密鑰"""
@@ -266,10 +273,12 @@ class GeminiCommenterGUI:
                 f"API密鑰已更新: {masked_key} (長度: {len(api_key)})"
             )
 
-    def _test_api_connection(self):
+    def _test_api_connection(self, nyaproxy_enabled):
         """測試API連接"""
-        # 使用新的測試函數
-        return test_api_connection(self.api_key, self.log_panel.add_log)
+        # 使用新的測試函數，直接接收 nyaproxy 狀態
+        return TestApiConnection.test_api_connection(
+            self.api_key, self.log_panel.add_log, nyaproxy_enabled
+        )
 
     def _browse_folder(self):
         """瀏覽選擇源文件夾"""
@@ -287,42 +296,34 @@ class GeminiCommenterGUI:
 
     def _start_processing(self):
         """開始處理文件"""
-        # 檢查API密鑰
+        # 0. 檢查是否有正在進行的任務
+        if self.is_processing:
+            self._show_message("警告", "一個處理程序已在運行中", True)
+            return
+
+        # 1. 檢查API金鑰
         if not self._check_api_key():
             return
 
-        # 檢查API連接
-        if not self._test_api_connection():
-            self._show_message(
-                "錯誤", "無法連接到Gemini API，請檢查API密鑰和網絡連接", True
-            )
-            return
-
-        # 獲取設置
+        # 2. 獲取所有設定
         settings = self.settings_panel.get_settings()
         folder = settings["folder"]
         output = settings["output"]
 
-        # 檢查源文件夾
-        if not folder:
-            self._show_message("錯誤", "請選擇源文件夾", True)
+        # 3. 驗證資料夾路徑
+        if not folder or not output:
+            self._show_message("錯誤", "請選擇源文件夾和輸出文件夾", True)
             return
-
         if not os.path.exists(folder):
             self._show_message("錯誤", f"源文件夾不存在: {folder}", True)
             return
 
-        # 檢查輸出文件夾
-        if not output:
-            # 使用默認輸出文件夾
-            output = os.path.join(os.path.dirname(folder), "commented")
-            self.settings_panel.output_entry.delete(0, tk.END)
-            self.settings_panel.output_entry.insert(0, output)
+        # 4. 測試API連線 (使用從設定中獲取的值)
+        if not self._test_api_connection(settings["nyaproxy"]):
+            self._show_message("錯誤", "無法連接到Gemini API，請檢查API金鑰和網絡連接", True)
+            return
 
-        # 創建輸出文件夾
-        os.makedirs(output, exist_ok=True)
-
-        # 更新UI狀態
+        # 5. 更新UI狀態並記錄日誌
         self.is_processing = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
@@ -337,18 +338,12 @@ class GeminiCommenterGUI:
         self.log_panel.add_log(f"使用模型: {settings['model_name']}")
         self.log_panel.add_log(f"請求延遲: {settings['delay']}秒")
         self.log_panel.add_log("使用指數退避算法處理API限制")
-
-        # 開始處理
-        self.file_processor.start_processing(
-            folder=folder,
-            output=output,
-            recursive=settings["recursive"],
-            api_key=self.api_key,
-            file_filter=settings["file_filter"],
-            delay=settings["delay"],
-            model_name=settings["model_name"],
-            use_nayproxy=settings["nayproxy"],
+        self.log_panel.add_log(
+            f"使用nyaproxy: {'是' if settings['nyaproxy'] else '否'}"
         )
+
+        # 6. 開始處理
+        self.file_processor.start_processing(settings)
 
     def _stop_processing(self):
         """停止處理"""
@@ -463,19 +458,3 @@ class GeminiCommenterGUI:
 
         # 關閉窗口
         self.root.destroy()
-
-
-def main():
-    """主函數"""
-    # 創建根窗口
-    root = tk.Tk()
-
-    # 創建應用
-    app = GeminiCommenterGUI(root)
-
-    # 運行主循環
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()

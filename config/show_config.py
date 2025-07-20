@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 
 
-def print_system_info(info_set):
+def show_system_info(info_set):
     """打印系統信息"""
     print("=" * 50)
     print(f"[INFO] 啟動Gemini代碼註釋器GUI")
